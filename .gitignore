@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Build output (main.js is committed for releases, but ignore during dev if you prefer)
+# main.js
+
+# Editor / OS cruft
+.DS_Store
+*.log
+.vscode/
+.idea/
+
+# Test build artifacts
+/tmp/conlang-test/
+
+# Obsidian local config if someone clones into a vault
+.obsidian/
+
+# npm
+package-lock.json
