@@ -16,5 +16,7 @@ node_modules/
 # Obsidian local config if someone clones into a vault
 .obsidian/
 
-# npm
-package-lock.json
+# Lockfile is committed for reproducible builds.
+# (Earlier versions of this gitignore excluded it, which the Obsidian
+# community plugin review flagged — committing the lockfile ensures
+# dependency resolution is reproducible across environments.)

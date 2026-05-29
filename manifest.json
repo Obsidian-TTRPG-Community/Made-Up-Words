@@ -1,7 +1,7 @@
 {
   "id": "made-up-words",
   "name": "Made Up Words",
-  "version": "0.15.0",
+  "version": "0.15.1",
   "minAppVersion": "1.4.0",
   "description": "A dictionary for the words you've made up. Browse, search, and look up your invented vocabulary across multiple languages, with hover tooltips and a side-panel lexicon.",
   "author": "Josh P",

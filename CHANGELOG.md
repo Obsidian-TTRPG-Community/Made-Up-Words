@@ -6,6 +6,32 @@ This project is pre-1.0. Expect rough edges and occasional breaking changes to
 settings or data formats. Where a change affects existing data, migration is
 handled automatically on load.
 
+## [0.15.1] — Plugin review fixes
+
+A small patch release addressing the Obsidian community plugin automated
+review. No user-facing functional changes; this is purely cleanup of
+warnings flagged by the review pipeline.
+
+### Fixed
+- **CSS:** Replaced the `text-decoration: underline dotted` shorthand
+  (partially supported by older Obsidian versions) with the longhand
+  `text-decoration-line` / `text-decoration-style` / `text-decoration-color`
+  properties, which have universal support.
+- **CSS:** Removed `!important` from `.conlang-modal-derive-row input` by
+  increasing selector specificity instead. This is more maintainable and
+  less fragile.
+
+### Changed
+- Replaced the `builtin-modules` npm dependency with Node's native
+  `module.builtinModules` (available since Node 9.x). One fewer
+  third-party dependency.
+- Upgraded `esbuild` from 0.17.3 to ^0.25.0 to clear a dev-time CVE
+  (advisory GHSA-67mh-4wv8-2f99). This vulnerability never affected end
+  users — esbuild is build-time only and not included in the released
+  `main.js` — but it's good hygiene.
+- `package-lock.json` is now committed to the repository for reproducible
+  builds, as recommended by the review pipeline.
+
 ## [0.15.0] — Initial public release
 
 First public release. The plugin has been through several rounds of private

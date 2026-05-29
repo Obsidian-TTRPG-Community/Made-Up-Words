@@ -114,25 +114,20 @@ function indexSheet(sheet) {
   let maxLen = 0;
   for (const r of enabled) {
     const len = r.input.length;
-    if (len > maxLen)
-      maxLen = len;
-    if (!lengths.has(len))
-      lengths.set(len, []);
+    if (len > maxLen) maxLen = len;
+    if (!lengths.has(len)) lengths.set(len, []);
     lengths.get(len).push(r);
     const lower = r.input.toLowerCase();
-    if (!byLowerInput.has(lower))
-      byLowerInput.set(lower, []);
+    if (!byLowerInput.has(lower)) byLowerInput.set(lower, []);
     byLowerInput.get(lower).push(r);
   }
   const byLength = Array.from(lengths.entries()).map(([len, rules]) => ({ len, rules })).sort((a, b) => b.len - a.len);
   return { byLength, maxLen, rulesByLowerInput: byLowerInput };
 }
 function preserveCasing(inputSegment, output) {
-  if (inputSegment.length === 0)
-    return output;
+  if (inputSegment.length === 0) return output;
   const allUpper = inputSegment === inputSegment.toUpperCase() && inputSegment !== inputSegment.toLowerCase();
-  if (allUpper)
-    return output.toUpperCase();
+  if (allUpper) return output.toUpperCase();
   const firstUpper = inputSegment[0] === inputSegment[0].toUpperCase() && inputSegment[0] !== inputSegment[0].toLowerCase();
   if (firstUpper) {
     return output.charAt(0).toUpperCase() + output.slice(1);
@@ -143,22 +138,18 @@ function findBestMatch(text, index, indexed) {
   const remaining = text.length - index;
   const maxCheck = Math.min(indexed.maxLen, remaining);
   for (const { len, rules } of indexed.byLength) {
-    if (len > maxCheck)
-      continue;
+    if (len > maxCheck) continue;
     const segment = text.substr(index, len);
     const lower = segment.toLowerCase();
     const candidates = indexed.rulesByLowerInput.get(lower);
-    if (!candidates)
-      continue;
+    if (!candidates) continue;
     const before = index > 0 ? text[index - 1] : void 0;
     const after = index + len < text.length ? text[index + len] : void 0;
     let best = null;
     let bestPriority = -1;
     for (const r of candidates) {
-      if (r.input.length !== len)
-        continue;
-      if (!contextMatches(r.type, before, after))
-        continue;
+      if (r.input.length !== len) continue;
+      if (!contextMatches(r.type, before, after)) continue;
       const p = TYPE_PRIORITY[r.type];
       if (p > bestPriority) {
         best = r;
@@ -172,11 +163,9 @@ function findBestMatch(text, index, indexed) {
   return null;
 }
 function applySheet(text, sheet) {
-  if (!sheet.enabled)
-    return text;
+  if (!sheet.enabled) return text;
   const indexed = indexSheet(sheet);
-  if (indexed.maxLen === 0)
-    return text;
+  if (indexed.maxLen === 0) return text;
   const out = [];
   let i = 0;
   while (i < text.length) {
@@ -230,14 +219,11 @@ function extractBodyPreview(content) {
   for (const raw of lines) {
     const line = raw.trim();
     if (!line) {
-      if (inParagraph)
-        break;
+      if (inParagraph) break;
       continue;
     }
-    if (line.startsWith("#"))
-      continue;
-    if (/^Translates \*[^*]+\*\.?$/.test(line))
-      continue;
+    if (line.startsWith("#")) continue;
+    if (/^Translates \*[^*]+\*\.?$/.test(line)) continue;
     paragraph.push(line);
     inParagraph = true;
   }
@@ -336,13 +322,11 @@ var Dictionary = class {
     const properNounEntries = [];
     for (const source of sources) {
       const folder = this.app.vault.getAbstractFileByPath(source.folder);
-      if (!folder || !(folder instanceof import_obsidian.TFolder))
-        continue;
+      if (!folder || !(folder instanceof import_obsidian.TFolder)) continue;
       const files = this.collectMarkdownFiles(folder);
       for (const file of files) {
         const entry = this.readEntry(file);
-        if (!entry)
-          continue;
+        if (!entry) continue;
         if (source.language && entry.language && entry.language !== source.language) {
           continue;
         }
@@ -392,21 +376,16 @@ var Dictionary = class {
   readEntry(file) {
     var _a, _b, _c, _d, _e, _f, _g;
     const cache = this.app.metadataCache.getFileCache(file);
-    if (!cache)
-      return null;
+    if (!cache) return null;
     const fm = (_a = cache.frontmatter) != null ? _a : {};
     const asString = (v) => {
-      if (v === void 0 || v === null)
-        return void 0;
-      if (typeof v === "string")
-        return v;
-      if (typeof v === "number" || typeof v === "boolean")
-        return String(v);
+      if (v === void 0 || v === null) return void 0;
+      if (typeof v === "string") return v;
+      if (typeof v === "number" || typeof v === "boolean") return String(v);
       return void 0;
     };
     const definition = asString((_c = (_b = fm.definition) != null ? _b : fm.translation) != null ? _c : fm.meaning);
-    if (!definition || !definition.trim())
-      return null;
+    if (!definition || !definition.trim()) return null;
     const wordOverride = (_e = (_d = asString(fm.word)) == null ? void 0 : _d.trim()) != null ? _e : "";
     const word = wordOverride || file.basename;
     const isPhrase = /\s/.test(word);
@@ -489,36 +468,26 @@ function escapeHtml(s) {
 
 // inflection.ts
 function findInflection(word, dictionary, rules) {
-  if (!rules || rules.length === 0)
-    return null;
+  if (!rules || rules.length === 0) return null;
   const lower = word.toLowerCase();
   for (const rule of rules) {
-    if (!rule.enabled)
-      continue;
-    if (!rule.pattern)
-      continue;
+    if (!rule.enabled) continue;
+    if (!rule.pattern) continue;
     const candidate = tryRule(lower, rule);
-    if (!candidate)
-      continue;
-    if (candidate === lower)
-      continue;
+    if (!candidate) continue;
+    if (candidate === lower) continue;
     const entry = dictionary.lookup(candidate);
-    if (!entry)
-      continue;
-    if (!posMatches(rule.pos, entry.partOfSpeech))
-      continue;
+    if (!entry) continue;
+    if (!posMatches(rule.pos, entry.partOfSpeech)) continue;
     return { lemma: entry, rule, inflectedForm: word };
   }
   return null;
 }
 function posMatches(filter, entryPos) {
-  if (!filter || filter.trim() === "")
-    return true;
-  if (!entryPos)
-    return false;
+  if (!filter || filter.trim() === "") return true;
+  if (!entryPos) return false;
   const allowed = filter.split(",").map((s) => s.trim().toLowerCase()).filter((s) => s);
-  if (allowed.length === 0)
-    return true;
+  if (allowed.length === 0) return true;
   return allowed.includes(entryPos.toLowerCase());
 }
 function tryRule(word, rule) {
@@ -526,40 +495,30 @@ function tryRule(word, rule) {
   const strip = rule.strip.toLowerCase();
   const add = rule.add.toLowerCase();
   if (rule.position === "suffix") {
-    if (!word.endsWith(patt))
-      return null;
-    if (!word.endsWith(strip))
-      return null;
+    if (!word.endsWith(patt)) return null;
+    if (!word.endsWith(strip)) return null;
     const base = word.slice(0, word.length - strip.length);
     return base + add;
   }
   if (rule.position === "prefix") {
-    if (!word.startsWith(patt))
-      return null;
-    if (!word.startsWith(strip))
-      return null;
+    if (!word.startsWith(patt)) return null;
+    if (!word.startsWith(strip)) return null;
     const base = word.slice(strip.length);
     return add + base;
   }
   return null;
 }
 function generateInflections(lemma, rules) {
-  if (!rules || rules.length === 0)
-    return [];
+  if (!rules || rules.length === 0) return [];
   const out = [];
   const word = lemma.word.toLowerCase();
   for (const rule of rules) {
-    if (!rule.enabled)
-      continue;
-    if (!rule.pattern)
-      continue;
-    if (!posMatches(rule.pos, lemma.partOfSpeech))
-      continue;
+    if (!rule.enabled) continue;
+    if (!rule.pattern) continue;
+    if (!posMatches(rule.pos, lemma.partOfSpeech)) continue;
     const generated = applyRuleForward(word, rule);
-    if (!generated)
-      continue;
-    if (generated === word)
-      continue;
+    if (!generated) continue;
+    if (generated === word) continue;
     out.push({ form: generated, rule });
   }
   return out;
@@ -570,8 +529,7 @@ function applyRuleForward(lemma, rule) {
   const add = rule.add.toLowerCase();
   if (rule.position === "suffix") {
     if (add.length > 0) {
-      if (!lemma.endsWith(add))
-        return null;
+      if (!lemma.endsWith(add)) return null;
       const base = lemma.slice(0, lemma.length - add.length);
       return base + strip;
     }
@@ -579,8 +537,7 @@ function applyRuleForward(lemma, rule) {
   }
   if (rule.position === "prefix") {
     if (add.length > 0) {
-      if (!lemma.startsWith(add))
-        return null;
+      if (!lemma.startsWith(add)) return null;
       const base = lemma.slice(add.length);
       return strip + base;
     }
@@ -598,8 +555,7 @@ function isWordChar(ch) {
   return /[\p{L}'-]/u.test(ch);
 }
 function applyCasing(source, target) {
-  if (source.length === 0 || target.length === 0)
-    return target;
+  if (source.length === 0 || target.length === 0) return target;
   if (source === source.toUpperCase() && source !== source.toLowerCase()) {
     return target.toUpperCase();
   }
@@ -654,10 +610,8 @@ function matchPhraseAt(words, startIdx, phrases, source) {
   const remaining = words.length - startIdx;
   for (const phrase of phrases) {
     const wc = (_a = phrase.wordCount) != null ? _a : 0;
-    if (wc < 2)
-      continue;
-    if (wc > remaining)
-      continue;
+    if (wc < 2) continue;
+    if (wc > remaining) continue;
     const phraseWords = phrase.word.toLowerCase().split(/\s+/);
     let allMatch = true;
     for (let i = 0; i < wc; i++) {
@@ -666,8 +620,7 @@ function matchPhraseAt(words, startIdx, phrases, source) {
         break;
       }
     }
-    if (!allMatch)
-      continue;
+    if (!allMatch) continue;
     let cleanGaps = true;
     for (let i = 0; i < wc - 1; i++) {
       const gap = source.slice(words[startIdx + i].end, words[startIdx + i + 1].start);
@@ -676,8 +629,7 @@ function matchPhraseAt(words, startIdx, phrases, source) {
         break;
       }
     }
-    if (!cleanGaps)
-      continue;
+    if (!cleanGaps) continue;
     return { entry: phrase, wordCount: wc };
   }
   return null;
@@ -685,8 +637,7 @@ function matchPhraseAt(words, startIdx, phrases, source) {
 function matchPhraseAtStart(text, phrases) {
   const tokens = tokeniseWithPhrases(text, phrases);
   for (const t of tokens) {
-    if (t.kind === "separator")
-      continue;
+    if (t.kind === "separator") continue;
     if (t.kind === "phrase" && t.entry) {
       return { entry: t.entry, matchedText: t.text };
     }
@@ -792,10 +743,8 @@ var ConlangSettingTab = class extends import_obsidian2.PluginSettingTab {
       cb.addEventListener("change", async () => {
         var _a;
         const set = new Set(this.plugin.settings.activeLanguages);
-        if (cb.checked)
-          set.add(lang.name);
-        else
-          set.delete(lang.name);
+        if (cb.checked) set.add(lang.name);
+        else set.delete(lang.name);
         this.plugin.settings.activeLanguages = Array.from(set);
         if (!this.plugin.settings.activeLanguages.includes(
           this.plugin.settings.primaryLanguage
@@ -962,20 +911,17 @@ var ConlangSettingTab = class extends import_obsidian2.PluginSettingTab {
           return;
         }
         const preset = findPreset(pendingPresetId);
-        if (!preset)
-          return;
+        if (!preset) return;
         const existingCount = (_b = (_a = lang.inflections) == null ? void 0 : _a.length) != null ? _b : 0;
         const confirmed = await this.confirmPreset(preset, existingCount);
-        if (!confirmed)
-          return;
+        if (!confirmed) return;
         lang.inflections = preset.rules.map((r) => ({ ...r }));
         await this.plugin.saveSettings();
         this.display();
         new import_obsidian2.Notice(`Made Up Words: applied preset "${preset.name}"`);
       })
     );
-    if (!lang.inflections)
-      lang.inflections = [];
+    if (!lang.inflections) lang.inflections = [];
     this.renderInflectionTable(wrap, lang);
     new import_obsidian2.Setting(wrap).addButton(
       (b) => b.setButtonText("Add inflection rule").onClick(async () => {
@@ -999,8 +945,7 @@ var ConlangSettingTab = class extends import_obsidian2.PluginSettingTab {
    * If there are no existing rules, we don't bother prompting.
    */
   async confirmPreset(preset, existingCount) {
-    if (existingCount === 0)
-      return true;
+    if (existingCount === 0) return true;
     return new Promise((resolve) => {
       const modal = new PresetConfirmModal(this.app, preset.name, preset.description, existingCount, resolve);
       modal.open();
@@ -1069,8 +1014,7 @@ var ConlangSettingTab = class extends import_obsidian2.PluginSettingTab {
     const typeEl = typeTd.createEl("select");
     ["word", "prefix", "suffix", "default"].forEach((t) => {
       const opt = typeEl.createEl("option", { text: t, value: t });
-      if (t === rule.type)
-        opt.selected = true;
+      if (t === rule.type) opt.selected = true;
     });
     typeEl.addEventListener("change", async () => {
       rule.type = typeEl.value;
@@ -1123,8 +1067,7 @@ var ConlangSettingTab = class extends import_obsidian2.PluginSettingTab {
     const posEl = posTd.createEl("select");
     ["suffix", "prefix"].forEach((p) => {
       const opt = posEl.createEl("option", { text: p, value: p });
-      if (p === rule.position)
-        opt.selected = true;
+      if (p === rule.position) opt.selected = true;
     });
     posEl.addEventListener("change", async () => {
       rule.position = posEl.value;
@@ -1132,8 +1075,7 @@ var ConlangSettingTab = class extends import_obsidian2.PluginSettingTab {
     });
     mkText(rule.pattern, (v) => {
       rule.pattern = v;
-      if (!rule.strip)
-        rule.strip = v;
+      if (!rule.strip) rule.strip = v;
     });
     mkText(rule.strip, (v) => rule.strip = v);
     mkText(rule.add, (v) => rule.add = v);
@@ -1187,8 +1129,7 @@ var PresetConfirmModal = class extends import_obsidian2.Modal {
     });
   }
   onClose() {
-    if (!this.decided)
-      this.resolve(false);
+    if (!this.decided) this.resolve(false);
     this.contentEl.empty();
   }
 };
@@ -1242,8 +1183,7 @@ var EXPLANATIONS = {
   "adverb": "Turns an adjective into an adverb. English -ly (quick \u2192 quickly). Many languages have a dedicated suffix."
 };
 function explainInflection(label) {
-  if (!label)
-    return void 0;
+  if (!label) return void 0;
   const key = label.toLowerCase().trim().replace(/\.$/, "");
   return EXPLANATIONS[key];
 }
@@ -1347,10 +1287,8 @@ function tokeniseEnglishAgainstDictionary(text, dictionary, lang) {
         phraseSourceText += s.text;
         j++;
       }
-      if (!cleanGaps)
-        continue;
-      if (collected.length < n)
-        continue;
+      if (!cleanGaps) continue;
+      if (collected.length < n) continue;
       const phrase = collected.join(" ");
       const hits2 = dictionary.lookupEnglish(phrase);
       if (hits2.length > 0) {
@@ -1364,8 +1302,7 @@ function tokeniseEnglishAgainstDictionary(text, dictionary, lang) {
         break;
       }
     }
-    if (matched)
-      continue;
+    if (matched) continue;
     const word = seg.text;
     const hits = dictionary.lookupEnglish(word);
     if (hits.length > 0) {
@@ -1600,10 +1537,8 @@ var TranslationPanelView = class extends import_obsidian3.ItemView {
    */
   async setPrimaryLanguage(name) {
     const settings = this.plugin.settings;
-    if (!settings.activeLanguages.includes(name))
-      return;
-    if (settings.primaryLanguage === name)
-      return;
+    if (!settings.activeLanguages.includes(name)) return;
+    if (settings.primaryLanguage === name) return;
     settings.primaryLanguage = name;
     await this.plugin.saveSettings();
     this.renderHeader();
@@ -1615,20 +1550,15 @@ var TranslationPanelView = class extends import_obsidian3.ItemView {
     const mkTab = (id, label) => {
       const tab = this.tabsEl.createDiv({ cls: "conlang-tab" });
       tab.setText(label);
-      if (id === this.activeTab)
-        tab.addClass("active");
+      if (id === this.activeTab) tab.addClass("active");
       tab.addEventListener("click", () => {
-        if (this.activeTab === id)
-          return;
+        if (this.activeTab === id) return;
         this.activeTab = id;
         this.renderTabs();
         this.showActiveTab();
-        if (id === "translate")
-          this.updateTranslate();
-        else if (id === "dictionary")
-          this.renderBrowser();
-        else if (id === "translator")
-          this.runTranslatorTranslation();
+        if (id === "translate") this.updateTranslate();
+        else if (id === "dictionary") this.renderBrowser();
+        else if (id === "translator") this.runTranslatorTranslation();
       });
       return tab;
     };
@@ -1680,8 +1610,7 @@ var TranslationPanelView = class extends import_obsidian3.ItemView {
     this.entriesEl = this.translateBodyEl.createDiv({ cls: "conlang-panel-entries" });
   }
   scheduleTranslateUpdate() {
-    if (this.updateScheduled)
-      return;
+    if (this.updateScheduled) return;
     this.updateScheduled = true;
     window.requestAnimationFrame(() => {
       this.updateScheduled = false;
@@ -1689,11 +1618,9 @@ var TranslationPanelView = class extends import_obsidian3.ItemView {
     });
   }
   updateTranslate() {
-    if (this.activeTab !== "translate")
-      return;
+    if (this.activeTab !== "translate") return;
     const text = this.readSelection();
-    if (text === this.lastRenderedText)
-      return;
+    if (text === this.lastRenderedText) return;
     this.lastRenderedText = text;
     if (!text || text.trim().length === 0) {
       this.translateBodyEl.style.display = "none";
@@ -1726,11 +1653,9 @@ var TranslationPanelView = class extends import_obsidian3.ItemView {
       }
       return null;
     }
-    if (!/^[\p{L}'-]+$/u.test(trimmed))
-      return null;
+    if (!/^[\p{L}'-]+$/u.test(trimmed)) return null;
     const cleaned = cleanWord(trimmed);
-    if (!cleaned)
-      return null;
+    if (!cleaned) return null;
     const direct = this.plugin.dictionary.lookup(cleaned);
     if (direct) {
       return { entry: direct, viaInflection: null };
@@ -1755,16 +1680,14 @@ var TranslationPanelView = class extends import_obsidian3.ItemView {
     const view = this.plugin.app.workspace.getActiveViewOfType(import_obsidian3.MarkdownView);
     if (view) {
       const editorSel = view.editor.getSelection();
-      if (editorSel && editorSel.length > 0)
-        return editorSel;
+      if (editorSel && editorSel.length > 0) return editorSel;
     }
     const sel = window.getSelection();
     if (sel && sel.toString().length > 0) {
       const anchor = sel.anchorNode;
       if (anchor instanceof Node) {
         const el = anchor.nodeType === Node.ELEMENT_NODE ? anchor : anchor.parentElement;
-        if (el && el.closest(".conlang-panel"))
-          return "";
+        if (el && el.closest(".conlang-panel")) return "";
       }
       return sel.toString();
     }
@@ -1777,8 +1700,7 @@ var TranslationPanelView = class extends import_obsidian3.ItemView {
     const phrases = this.plugin.dictionary.allPhrases();
     const tokens = tokeniseWithPhrases(text, phrases);
     for (const t of tokens) {
-      if (t.kind === "separator")
-        continue;
+      if (t.kind === "separator") continue;
       let entry;
       if (t.kind === "phrase") {
         entry = t.entry;
@@ -1786,8 +1708,7 @@ var TranslationPanelView = class extends import_obsidian3.ItemView {
         entry = this.plugin.dictionary.lookup(t.text);
         if (!entry && lang) {
           const m = findInflection(t.text, this.plugin.dictionary, lang.inflections);
-          if (m)
-            entry = m.lemma;
+          if (m) entry = m.lemma;
         }
       }
       if (entry && !seen.has(entry.word.toLowerCase())) {
@@ -1820,8 +1741,7 @@ var TranslationPanelView = class extends import_obsidian3.ItemView {
    */
   setTranslationBlockVisible(visible) {
     const block = this.sourceLabel.parentElement;
-    if (block)
-      block.style.display = visible ? "" : "none";
+    if (block) block.style.display = visible ? "" : "none";
     this.actionsEl.style.display = visible ? "" : "none";
   }
   /**
@@ -1997,11 +1917,9 @@ var TranslationPanelView = class extends import_obsidian3.ItemView {
         cls: "conlang-panel-btn conlang-panel-btn-primary"
       });
       replaceBtn.disabled = !hasEditor;
-      if (!hasEditor)
-        replaceBtn.title = "Make a selection in an editor to enable.";
+      if (!hasEditor) replaceBtn.title = "Make a selection in an editor to enable.";
       replaceBtn.addEventListener("click", () => {
-        if (view)
-          this.plugin.commitSelectionToConlang(view.editor);
+        if (view) this.plugin.commitSelectionToConlang(view.editor);
       });
       const createBtn = this.actionsEl.createEl("button", {
         text: "Save to dictionary",
@@ -2032,17 +1950,14 @@ var TranslationPanelView = class extends import_obsidian3.ItemView {
       if (matched.length > 0) {
         const header2 = this.entriesEl.createDiv({ cls: "conlang-panel-section-header" });
         header2.setText("Matched dictionary entries");
-        for (const entry of matched)
-          this.renderEntryCard(this.entriesEl, entry);
+        for (const entry of matched) this.renderEntryCard(this.entriesEl, entry);
       }
       return;
     }
-    if (entries.length === 0)
-      return;
+    if (entries.length === 0) return;
     const header = this.entriesEl.createDiv({ cls: "conlang-panel-section-header" });
     header.setText("Dictionary entries");
-    for (const entry of entries)
-      this.renderEntryCard(this.entriesEl, entry);
+    for (const entry of entries) this.renderEntryCard(this.entriesEl, entry);
   }
   renderEntryCard(parent, entry) {
     const card = parent.createDiv({ cls: "conlang-panel-entry" });
@@ -2112,8 +2027,7 @@ var TranslationPanelView = class extends import_obsidian3.ItemView {
     for (const m of modes) {
       const btn = modeGroup.createEl("button", { text: m.label, cls: "conlang-browser-segment" });
       btn.title = m.tooltip;
-      if (m.value === this.translatorMode)
-        btn.addClass("active");
+      if (m.value === this.translatorMode) btn.addClass("active");
       btn.addEventListener("click", () => {
         this.translatorMode = m.value;
         modeGroup.querySelectorAll(".conlang-browser-segment").forEach((el) => el.removeClass("active"));
@@ -2174,8 +2088,7 @@ var TranslationPanelView = class extends import_obsidian3.ItemView {
    * Run the lookup and render the output according to the current mode.
    */
   runTranslatorTranslation() {
-    if (!this.translatorOutputEl)
-      return;
+    if (!this.translatorOutputEl) return;
     const input = this.translatorInput;
     this.translatorOutputEl.empty();
     this.translatorOutputEl.removeClass("is-empty");
@@ -2260,8 +2173,7 @@ var TranslationPanelView = class extends import_obsidian3.ItemView {
           const tag = head.createSpan({ cls: "conlang-gloss-token-tag" });
           tag.setText(t.inflection.label);
           const expl = explainInflection(t.inflection.label);
-          if (expl)
-            tag.title = expl;
+          if (expl) tag.title = expl;
           const meta = card.createDiv({ cls: "conlang-gloss-token-meta" });
           meta.setText(`lemma: ${t.inflection.lemma.word}`);
         }
@@ -2289,10 +2201,8 @@ var TranslationPanelView = class extends import_obsidian3.ItemView {
   renderTokenMeta(card, entry) {
     const meta = card.createDiv({ cls: "conlang-gloss-token-meta" });
     const parts = [];
-    if (entry.partOfSpeech)
-      parts.push(entry.partOfSpeech);
-    if (entry.ipa)
-      parts.push(entry.ipa);
+    if (entry.partOfSpeech) parts.push(entry.partOfSpeech);
+    if (entry.ipa) parts.push(entry.ipa);
     const sense = firstSense(entry.definition);
     if (sense && sense.toLowerCase() !== entry.word.toLowerCase()) {
       parts.push(`"${sense}"`);
@@ -2404,8 +2314,7 @@ var TranslationPanelView = class extends import_obsidian3.ItemView {
     var _a, _b, _c, _d, _e;
     if (this.translatorMode !== "transliterate") {
       const input = this.translatorInput;
-      if (!input.trim())
-        return;
+      if (!input.trim()) return;
       const lang = this.plugin.getActiveLanguage();
       const tokens = this.translatorDirection === "english-to-conlang" ? glossEnglishToConlang(input, this.plugin.dictionary, lang) : glossConlangToEnglish(input, this.plugin.dictionary, lang);
       const text2 = renderTransliterationString(tokens);
@@ -2423,8 +2332,7 @@ var TranslationPanelView = class extends import_obsidian3.ItemView {
       return;
     }
     const text = (_c = (_b = this.translatorOutputEl) == null ? void 0 : _b.textContent) != null ? _c : "";
-    if (!text || ((_d = this.translatorOutputEl) == null ? void 0 : _d.hasClass("is-empty")))
-      return;
+    if (!text || ((_d = this.translatorOutputEl) == null ? void 0 : _d.hasClass("is-empty"))) return;
     try {
       await navigator.clipboard.writeText(text);
       const original = (_e = this.translatorCopyBtn.textContent) != null ? _e : "Copy";
@@ -2462,8 +2370,7 @@ var TranslationPanelView = class extends import_obsidian3.ItemView {
     ];
     for (const opt of sortOptions) {
       const o = sortSelect.createEl("option", { text: opt.label, value: opt.value });
-      if (opt.value === this.sortKey)
-        o.selected = true;
+      if (opt.value === this.sortKey) o.selected = true;
     }
     sortSelect.addEventListener("change", () => {
       this.sortKey = sortSelect.value;
@@ -2491,8 +2398,7 @@ var TranslationPanelView = class extends import_obsidian3.ItemView {
         cls: "conlang-browser-segment"
       });
       btn.title = opt.tooltip;
-      if (opt.value === this.nameFilter)
-        btn.addClass("active");
+      if (opt.value === this.nameFilter) btn.addClass("active");
       btn.addEventListener("click", () => {
         this.nameFilter = opt.value;
         namesGroup.querySelectorAll(".conlang-browser-segment").forEach((el) => el.removeClass("active"));
@@ -2530,14 +2436,12 @@ var TranslationPanelView = class extends import_obsidian3.ItemView {
       posSelect.createEl("option", { text: "All", value: "" });
       const posSet = /* @__PURE__ */ new Set();
       for (const entry of this.plugin.dictionary.allEntries()) {
-        if (entry.partOfSpeech)
-          posSet.add(entry.partOfSpeech);
+        if (entry.partOfSpeech) posSet.add(entry.partOfSpeech);
       }
       const sortedPos = Array.from(posSet).sort();
       for (const pos of sortedPos) {
         const opt = posSelect.createEl("option", { text: pos, value: pos });
-        if (pos === previous)
-          opt.selected = true;
+        if (pos === previous) opt.selected = true;
       }
       if (previous && !posSet.has(previous)) {
         this.posFilter = "";
@@ -2557,22 +2461,14 @@ var TranslationPanelView = class extends import_obsidian3.ItemView {
     const q = this.searchQuery.trim().toLowerCase();
     let filtered = all.filter((entry) => {
       const isName = this.isProperNoun(entry);
-      if (this.nameFilter === "names-only" && !isName)
-        return false;
-      if (this.nameFilter === "hide-names" && isName)
-        return false;
-      if (this.languageFilter && entry.language !== this.languageFilter)
-        return false;
-      if (this.posFilter && entry.partOfSpeech !== this.posFilter)
-        return false;
-      if (!q)
-        return true;
-      if (entry.word.toLowerCase().includes(q))
-        return true;
-      if (entry.definition.toLowerCase().includes(q))
-        return true;
-      if (entry.nameCategory && entry.nameCategory.toLowerCase().includes(q))
-        return true;
+      if (this.nameFilter === "names-only" && !isName) return false;
+      if (this.nameFilter === "hide-names" && isName) return false;
+      if (this.languageFilter && entry.language !== this.languageFilter) return false;
+      if (this.posFilter && entry.partOfSpeech !== this.posFilter) return false;
+      if (!q) return true;
+      if (entry.word.toLowerCase().includes(q)) return true;
+      if (entry.definition.toLowerCase().includes(q)) return true;
+      if (entry.nameCategory && entry.nameCategory.toLowerCase().includes(q)) return true;
       return false;
     });
     filtered = filtered.slice().sort((a, b) => {
@@ -2584,8 +2480,7 @@ var TranslationPanelView = class extends import_obsidian3.ItemView {
         const pa = (_c = a.partOfSpeech) != null ? _c : "~";
         const pb = (_d = b.partOfSpeech) != null ? _d : "~";
         const c = pa.localeCompare(pb);
-        if (c !== 0)
-          return c;
+        if (c !== 0) return c;
       }
       return a.word.localeCompare(b.word);
     });
@@ -2650,10 +2545,8 @@ var TranslationPanelView = class extends import_obsidian3.ItemView {
   }
   renderBrowserRow(entry) {
     const row = this.browserListEl.createDiv({ cls: "conlang-browser-row" });
-    if (this.isProperNoun(entry))
-      row.addClass("is-name");
-    if (entry.isPhrase)
-      row.addClass("is-phrase");
+    if (this.isProperNoun(entry)) row.addClass("is-name");
+    if (entry.isPhrase) row.addClass("is-phrase");
     const word = row.createDiv({ cls: "conlang-browser-row-word" });
     word.setText(entry.word);
     if (entry.isPhrase) {
@@ -2791,8 +2684,7 @@ var EntryCreationModal = class extends import_obsidian4.Modal {
     this.close();
   }
   onClose() {
-    if (!this.decided)
-      this.resolve(null);
+    if (!this.decided) this.resolve(null);
     this.contentEl.empty();
   }
 };
@@ -2908,10 +2800,8 @@ var NameCreationModal = class extends import_obsidian5.Modal {
     const all = chips.querySelectorAll(".conlang-modal-chip");
     all.forEach((el) => {
       const btn = el;
-      if (btn.textContent === this.category)
-        btn.addClass("selected");
-      else
-        btn.removeClass("selected");
+      if (btn.textContent === this.category) btn.addClass("selected");
+      else btn.removeClass("selected");
     });
   }
   submit() {
@@ -2935,8 +2825,7 @@ var NameCreationModal = class extends import_obsidian5.Modal {
     this.close();
   }
   onClose() {
-    if (!this.decided)
-      this.resolve(null);
+    if (!this.decided) this.resolve(null);
     this.contentEl.empty();
   }
 };
@@ -2970,8 +2859,7 @@ var LookupModal = class extends import_obsidian6.Modal {
   }
   renderMatch(parent, match) {
     var _a, _b, _c;
-    if (match.kind === "none")
-      return;
+    if (match.kind === "none") return;
     if (match.kind === "cypher") {
       const row = parent.createDiv({ cls: "conlang-lookup-row conlang-lookup-cypher" });
       const head = row.createDiv({ cls: "conlang-lookup-row-head" });
@@ -3002,8 +2890,7 @@ var LookupModal = class extends import_obsidian6.Modal {
     if (match.candidates) {
       for (const entry of match.candidates) {
         const row = parent.createDiv({ cls: "conlang-lookup-row" });
-        if (match.kind === "phrase")
-          row.addClass("conlang-lookup-phrase");
+        if (match.kind === "phrase") row.addClass("conlang-lookup-phrase");
         const head = row.createDiv({ cls: "conlang-lookup-row-head" });
         const word = head.createSpan({ cls: "conlang-lookup-word" });
         word.setText(entry.word);
@@ -3164,8 +3051,7 @@ var WordCreationModal = class extends import_obsidian7.Modal {
     this.close();
   }
   onClose() {
-    if (!this.decided)
-      this.resolve(null);
+    if (!this.decided) this.resolve(null);
     this.contentEl.empty();
   }
 };
@@ -3191,8 +3077,7 @@ var ConlangPlugin = class extends import_obsidian8.Plugin {
     this.registerEvent(
       this.app.metadataCache.on("changed", (file) => {
         const lang = this.getActiveLanguage();
-        if (!lang)
-          return;
+        if (!lang) return;
         if (file.path.startsWith(lang.dictionaryFolder)) {
           this.reloadActiveLanguage().then(() => this.refreshPanel());
         }
@@ -3277,8 +3162,7 @@ var ConlangPlugin = class extends import_obsidian8.Plugin {
     if ((!this.settings.activeLanguages || this.settings.activeLanguages.length === 0) && this.settings.activeLanguage) {
       this.settings.activeLanguages = [this.settings.activeLanguage];
     }
-    if (!this.settings.activeLanguages)
-      this.settings.activeLanguages = [];
+    if (!this.settings.activeLanguages) this.settings.activeLanguages = [];
     this.settings.activeLanguages = this.settings.activeLanguages.filter(
       (n) => known.has(n)
     );
@@ -3304,8 +3188,7 @@ var ConlangPlugin = class extends import_obsidian8.Plugin {
    * The flag persists in settings so the message only shows once per install.
    */
   maybeShowWelcome() {
-    if (this.settings.hasSeenWelcome)
-      return;
+    if (this.settings.hasSeenWelcome) return;
     this.settings.hasSeenWelcome = true;
     this.saveData(this.settings);
     const message = "Made Up Words is loaded. Open the side panel via the book-open icon in the left ribbon, or via the command palette \u2192 'Made Up Words: Open panel'.";
@@ -3384,8 +3267,7 @@ var ConlangPlugin = class extends import_obsidian8.Plugin {
    */
   translateToConlang(text) {
     const lang = this.getActiveLanguage();
-    if (!lang)
-      return text;
+    if (!lang) return text;
     const replaced = this.replaceEnglishWithDictionary(text);
     return applyCypher(replaced, lang.sheets);
   }
@@ -3432,10 +3314,8 @@ var ConlangPlugin = class extends import_obsidian8.Plugin {
           }
           j++;
         }
-        if (!cleanGaps)
-          continue;
-        if (collected.length < n)
-          continue;
+        if (!cleanGaps) continue;
+        if (collected.length < n) continue;
         const phrase = collected.join(" ");
         const hits = this.dictionary.lookupEnglish(phrase);
         if (hits.length > 0) {
@@ -3467,12 +3347,9 @@ var ConlangPlugin = class extends import_obsidian8.Plugin {
     const line = editor.getLine(cursor.line);
     let start = cursor.ch;
     let end = cursor.ch;
-    while (start > 0 && isWordChar(line[start - 1]))
-      start--;
-    while (end < line.length && isWordChar(line[end]))
-      end++;
-    if (start === end)
-      return null;
+    while (start > 0 && isWordChar(line[start - 1])) start--;
+    while (end < line.length && isWordChar(line[end])) end++;
+    if (start === end) return null;
     return {
       text: line.substring(start, end),
       from: { line: cursor.line, ch: start },
@@ -3558,8 +3435,7 @@ var ConlangPlugin = class extends import_obsidian8.Plugin {
       return;
     }
     const query = sel.text.trim();
-    if (!query)
-      return;
+    if (!query) return;
     const matches = this.collectLookupMatches(query);
     new LookupModal(this.app, query, matches).open();
   }
@@ -3583,13 +3459,11 @@ var ConlangPlugin = class extends import_obsidian8.Plugin {
     if (!/\s/.test(cleaned)) {
       for (const lang of activeLangs) {
         const inflectionMatch = findInflection(cleaned, this.dictionary, lang.inflections);
-        if (!inflectionMatch)
-          continue;
+        if (!inflectionMatch) continue;
         const alreadyShown = directMatches.some(
           (e) => e.path === inflectionMatch.lemma.path
         );
-        if (alreadyShown)
-          continue;
+        if (alreadyShown) continue;
         out.push({
           kind: "inflected",
           candidates: [inflectionMatch.lemma],
@@ -3643,8 +3517,7 @@ var ConlangPlugin = class extends import_obsidian8.Plugin {
       return;
     }
     const opts = await this.promptForEntryOptions(englishText, translated);
-    if (opts === null)
-      return;
+    if (opts === null) return;
     const content = [
       "---",
       `definition: ${englishText}`,
@@ -3687,8 +3560,7 @@ var ConlangPlugin = class extends import_obsidian8.Plugin {
       const cypherFn = (s) => this.translateToConlang(s);
       new WordCreationModal(this.app, cypherFn, resolve).open();
     });
-    if (!result)
-      return;
+    if (!result) return;
     const folder = lang.dictionaryFolder;
     await this.ensureFolder(folder);
     const safeName = result.conlangWord.replace(/[\\/:*?"<>|]/g, "_");
@@ -3731,8 +3603,7 @@ var ConlangPlugin = class extends import_obsidian8.Plugin {
       return;
     }
     const result = await this.promptForName();
-    if (!result)
-      return;
+    if (!result) return;
     const folder = lang.dictionaryFolder;
     await this.ensureFolder(folder);
     const safeName = result.conlangForm.replace(/[\\/:*?"<>|]/g, "_");
@@ -3789,19 +3660,16 @@ var ConlangPlugin = class extends import_obsidian8.Plugin {
     return new Promise((resolve) => {
       let done = false;
       const finish = () => {
-        if (done)
-          return;
+        if (done) return;
         done = true;
         this.app.metadataCache.offref(ref);
         window.clearTimeout(timer);
         resolve();
       };
       const ref = this.app.metadataCache.on("changed", (changed) => {
-        if (changed.path !== file.path)
-          return;
+        if (changed.path !== file.path) return;
         const c = this.app.metadataCache.getFileCache(changed);
-        if (c && c.frontmatter && c.frontmatter.definition)
-          finish();
+        if (c && c.frontmatter && c.frontmatter.definition) finish();
       });
       const timer = window.setTimeout(finish, 2e3);
     });
@@ -3947,16 +3815,14 @@ var ConlangPlugin = class extends import_obsidian8.Plugin {
     const wordPositions = [];
     let m;
     while ((m = wordRe.exec(fullContext)) !== null) {
-      if (m.index > cursorWordStart)
-        break;
+      if (m.index > cursorWordStart) break;
       wordPositions.push(m.index);
     }
     for (let i = wordPositions.length - 1; i >= 0; i--) {
       const startPos = wordPositions[i];
       const candidate = fullContext.slice(startPos);
       const hit = matchPhraseAtStart(candidate, phrases);
-      if (!hit)
-        continue;
+      if (!hit) continue;
       const matchEnd = startPos + hit.matchedText.length;
       if (matchEnd > cursorWordStart) {
         return hit.entry;
@@ -3980,30 +3846,23 @@ var ConlangPlugin = class extends import_obsidian8.Plugin {
     let offset = 0;
     if (typeof doc.caretRangeFromPoint === "function") {
       const range = doc.caretRangeFromPoint(x, y);
-      if (!range)
-        return null;
+      if (!range) return null;
       textNode = range.startContainer;
       offset = range.startOffset;
     } else if (typeof doc.caretPositionFromPoint === "function") {
       const pos = doc.caretPositionFromPoint(x, y);
-      if (!pos)
-        return null;
+      if (!pos) return null;
       textNode = pos.offsetNode;
       offset = pos.offset;
     }
-    if (!textNode || textNode.nodeType !== Node.TEXT_NODE)
-      return null;
+    if (!textNode || textNode.nodeType !== Node.TEXT_NODE) return null;
     const text = (_a = textNode.textContent) != null ? _a : "";
-    if (!text)
-      return null;
+    if (!text) return null;
     let start = offset;
     let end = offset;
-    while (start > 0 && isWordChar(text[start - 1]))
-      start--;
-    while (end < text.length && isWordChar(text[end]))
-      end++;
-    if (start === end)
-      return null;
+    while (start > 0 && isWordChar(text[start - 1])) start--;
+    while (end < text.length && isWordChar(text[end])) end++;
+    if (start === end) return null;
     const word = text.substring(start, end);
     const forwardContext = text.substring(start, Math.min(text.length, end + 50));
     const backwardContext = text.substring(Math.max(0, start - 50), end);
@@ -4090,8 +3949,7 @@ var ConlangPlugin = class extends import_obsidian8.Plugin {
     this.positionTooltip(x, y);
   }
   positionTooltip(x, y) {
-    if (!this.tooltipEl)
-      return;
+    if (!this.tooltipEl) return;
     const pad = 12;
     const rect = this.tooltipEl.getBoundingClientRect();
     let left = x + pad;
@@ -4106,8 +3964,7 @@ var ConlangPlugin = class extends import_obsidian8.Plugin {
     this.tooltipEl.style.top = `${top}px`;
   }
   scheduleHideTooltip() {
-    if (this.tooltipHideTimer !== null)
-      return;
+    if (this.tooltipHideTimer !== null) return;
     this.tooltipHideTimer = window.setTimeout(() => {
       this.hideTooltip();
       this.tooltipHideTimer = null;

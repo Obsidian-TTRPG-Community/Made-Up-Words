@@ -289,7 +289,9 @@
 }
 
 .conlang-translit-dict.multi-sense {
-  text-decoration: underline dotted var(--text-faint);
+  text-decoration-line: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: var(--text-faint);
   cursor: help;
 }
 
@@ -1033,9 +1035,14 @@
   align-items: center;
 }
 
+/* Inputs inside the derive-row sit on one line with the Cypher button;
+   they don't need the bottom margin the standalone modal inputs use.
+   Selector uses two classes (.conlang-modal-derive-row .conlang-modal-input)
+   to outrank the single-class .conlang-modal-input rule above. */
+.conlang-modal-derive-row .conlang-modal-input,
 .conlang-modal-derive-row input {
   flex: 1;
-  margin-bottom: 0 !important;
+  margin-bottom: 0;
 }
 
 .conlang-modal-category-display {
@@ -1282,7 +1289,9 @@
 /* Conventional "more info on hover" cue: dotted underline + help cursor */
 .conlang-form-label.has-explanation,
 .conlang-word-card-note.has-explanation {
-  text-decoration: underline dotted var(--text-faint);
+  text-decoration-line: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: var(--text-faint);
   text-underline-offset: 2px;
   cursor: help;
 }
