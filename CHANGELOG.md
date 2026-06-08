@@ -6,6 +6,43 @@ This project is pre-1.0. Expect rough edges and occasional breaking changes to
 settings or data formats. Where a change affects existing data, migration is
 handled automatically on load.
 
+## [0.17.0] - Aliases & per-language word adding
+
+_Resolves [#2](https://github.com/Obsidian-TTRPG-Community/Made-Up-Words/issues/2)._
+
+### Added
+- **Entry aliases.** A dictionary entry can now declare alternate surface forms
+  via an `aliases` frontmatter field, and hover tooltips + highlighting treat
+  every alias exactly like the headword. For example, on a `February` entry:
+
+  ```yaml
+  ---
+  definition: the second month
+  aliases: Feb, Febr
+  ---
+  ```
+
+  Hovering or highlighting `Feb` or `Febr` now resolves to the `February`
+  entry. Accepts a comma-separated string or a YAML list, and multi-word
+  aliases are matched like phrases. Aliases are shown in the hover tooltip
+  (e.g. "February (also: Feb, Febr)").
+- **Add a word to any language(s) — including several at once.** Highlight a word
+  (or place the cursor on one) and either right-click → **"Add to Made Up Words
+  dictionary…"** or run **"Add selection to dictionary"** from the command
+  palette. The Save dialog now lists every language with a checkbox and an
+  editable, cypher-seeded conlang form per language — tick one or several to
+  create an entry in each language's own folder in one go (with a shared part of
+  speech and definition). No more sorting words out of a single default folder.
+
+### Fixed
+- New entries now create their target folder reliably, with a clear error notice
+  if creation fails — adding a word to a brand-new subfolder now works.
+- **Hover tooltips now show a concept across every active language at once.**
+  Hovering combines both directions (the word as a headword and as a definition)
+  and also pulls in cross-language equivalents that share a definition — so
+  hovering one language's form for a concept (e.g. "Traenslaetis") also surfaces
+  the other languages' forms (e.g. "Translateees") in a single tooltip.
+
 ## [0.16.0] — Highlight known words
 
 ### Added

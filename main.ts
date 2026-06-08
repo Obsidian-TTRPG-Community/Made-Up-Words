@@ -6,6 +6,7 @@ import {
   Notice,
   Plugin,
   TFile,
+  TFolder,
   WorkspaceLeaf,
 } from "obsidian";
 import {
@@ -21,7 +22,13 @@ import { matchPhraseAtStart } from "./phrases";
 import { WORD_RE, cleanWord, isWordChar, applyCasing } from "./word-tokens";
 import { ConlangSettingTab } from "./settings";
 import { TranslationPanelView, VIEW_TYPE_PANEL } from "./panel";
-import { EntryCreationModal, EntryCreationOptions } from "./entry-modal";
+import {
+  EntryCreationModal,
+  EntryCreationOptions,
+  MultiEntryModal,
+  MultiEntryResult,
+  MultiEntryLanguageInit,
+} from "./entry-modal";
 import { NameCreationModal, NameCreationResult } from "./name-modal";
 import { LookupModal, LookupMatch } from "./lookup-modal";
 import { WordCreationModal, WordCreationResult } from "./word-modal";
@@ -171,6 +178,22 @@ export default class ConlangPlugin extends Plugin {
         );
       },
     });
+
+    // Right-click (editor context menu) entry point for adding the selected
+    // word/selection to a dictionary — more discoverable than the palette.
+    // Opens the language chooser (which auto-skips when only one language).
+    this.registerEvent(
+      this.app.workspace.on("editor-menu", (menu, editor) => {
+        const sel = this.getSelectionOrWord(editor);
+        if (!sel) return;
+        menu.addItem((item) =>
+          item
+            .setTitle("Add to Made Up Words dictionary…")
+            .setIcon("plus")
+            .onClick(() => this.createEntryFromSelection(editor))
+        );
+      })
+    );
 
     // Hover tooltip handler (throttled — see onMouseMove)
     this.registerDomEvent(document, "mousemove", (evt) => {
@@ -432,6 +455,11 @@ export default class ConlangPlugin extends Plugin {
   translateToConlang(text: string): string {
     const lang = this.getActiveLanguage();
     if (!lang) return text;
+    return this.translateToConlangWith(text, lang);
+  }
+
+  /** Translate English text using a specific language's cypher sheets. */
+  private translateToConlangWith(text: string, lang: LanguageConfig): string {
     const replaced = this.replaceEnglishWithDictionary(text);
     return applyCypher(replaced, lang.sheets);
   }
@@ -607,7 +635,149 @@ export default class ConlangPlugin extends Plugin {
       new Notice("Made Up Words: no selection or word under cursor");
       return;
     }
-    await this.createDictionaryEntryForText(sel.text);
+    await this.openMultiLangEntries(sel.text);
+  }
+
+  /**
+   * Open the multi-language "Save to dictionary" modal: pick one or more
+   * languages, tweak each cypher-seeded form, set a shared part of speech,
+   * then create one entry per chosen language (each in its own folder).
+   */
+  private async openMultiLangEntries(englishText: string) {
+    const langs = this.settings.languages;
+    if (langs.length === 0) {
+      new Notice("Made Up Words: no languages configured");
+      return;
+    }
+    const primary = this.settings.primaryLanguage;
+    const inits: MultiEntryLanguageInit[] = langs.map((l) => ({
+      languageName: l.name,
+      folder: l.dictionaryFolder,
+      form: this.translateToConlangWith(englishText, l),
+      checked: l.name === primary,
+    }));
+    const result = await new Promise<MultiEntryResult | null>((resolve) => {
+      new MultiEntryModal(this.app, englishText, inits, resolve).open();
+    });
+    if (!result) return;
+
+    const created: string[] = [];
+    const errors: string[] = [];
+    let firstPath: string | null = null;
+    for (const target of result.targets) {
+      const lang = langs.find((l) => l.name === target.languageName);
+      if (!lang) continue;
+      const r = await this.createOneEntry({
+        englishText,
+        lang,
+        conlangForm: target.form,
+        partOfSpeech: result.partOfSpeech,
+      });
+      if (r.ok) {
+        created.push(`${target.form} (${lang.name}${r.created ? "" : ", existing"})`);
+        if (!firstPath) firstPath = r.path;
+      } else {
+        errors.push(`${lang.name}: ${r.error}`);
+      }
+    }
+    await this.afterEntriesChanged();
+    if (firstPath) {
+      const f = this.app.vault.getAbstractFileByPath(firstPath);
+      if (f instanceof TFile) await this.app.workspace.getLeaf(false).openFile(f);
+    }
+    if (errors.length > 0) {
+      new Notice(
+        `Made Up Words: ${created.length} saved, ${errors.length} failed — ${errors.join("; ")}`,
+        9000
+      );
+    } else {
+      new Notice(
+        `Made Up Words: saved ${created.length} ${created.length === 1 ? "entry" : "entries"}`,
+        5000
+      );
+    }
+  }
+
+  /**
+   * Create one dictionary entry file. Robustly ensures the target folder
+   * exists and reports failures instead of throwing. Returns created=false
+   * when an entry with that form already exists.
+   */
+  private async createOneEntry(p: {
+    englishText: string;
+    lang: LanguageConfig;
+    conlangForm: string;
+    partOfSpeech: string;
+  }): Promise<
+    { ok: true; created: boolean; path: string } | { ok: false; error: string }
+  > {
+    const form = p.conlangForm.trim();
+    if (!form) return { ok: false, error: "empty conlang form" };
+    const folder = p.lang.dictionaryFolder;
+    const safeName = form.replace(/[\\/:*?"<>|]/g, "_");
+    const path = `${folder}/${safeName}.md`;
+    try {
+      await this.ensureFolderStrict(folder);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return { ok: false, error: `couldn't create folder "${folder}": ${msg}` };
+    }
+    const existing = this.app.vault.getAbstractFileByPath(path);
+    if (existing instanceof TFile) return { ok: true, created: false, path };
+    const content = [
+      "---",
+      `definition: ${p.englishText}`,
+      `language: ${p.lang.name}`,
+      `partOfSpeech: ${p.partOfSpeech}`,
+      "ipa: ",
+      "etymology: ",
+      "---",
+      "",
+      `# ${form}`,
+      "",
+      `Translates *${p.englishText}*.`,
+      "",
+    ].join("\n");
+    try {
+      const file = await this.app.vault.create(path, content);
+      await this.waitForFrontmatter(file);
+      return { ok: true, created: true, path };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return { ok: false, error: `couldn't create "${path}": ${msg}` };
+    }
+  }
+
+  /** Reload the dictionary + refresh UI after entries were added/changed. */
+  private async afterEntriesChanged() {
+    await this.reloadActiveLanguage();
+    this.refreshPanel();
+    this.refreshHighlights();
+    this.lastHoverWord = null;
+  }
+
+  /**
+   * Ensure a (possibly nested) folder exists, creating each missing level.
+   * Throws on a real failure (unlike ensureFolder, which is best-effort) so
+   * callers can surface the error to the user.
+   */
+  private async ensureFolderStrict(path: string): Promise<void> {
+    const parts = path.split("/").filter((p) => p.length > 0);
+    let current = "";
+    for (const part of parts) {
+      current = current ? `${current}/${part}` : part;
+      const existing = this.app.vault.getAbstractFileByPath(current);
+      if (existing instanceof TFolder) continue;
+      if (existing) throw new Error(`"${current}" exists but is not a folder`);
+      try {
+        await this.app.vault.createFolder(current);
+      } catch (e) {
+        // Tolerate a race where the folder appeared between check and create.
+        if (!(this.app.vault.getAbstractFileByPath(current) instanceof TFolder)) {
+          throw e;
+        }
+      }
+    }
   }
 
   /**
@@ -704,13 +874,16 @@ export default class ConlangPlugin extends Plugin {
   /**
    * Public so the panel button can call it.
    */
-  async createDictionaryEntryForText(englishText: string) {
-    const lang = this.getActiveLanguage();
+  async createDictionaryEntryForText(
+    englishText: string,
+    targetLang?: LanguageConfig
+  ) {
+    const lang = targetLang ?? this.getActiveLanguage();
     if (!lang) {
       new Notice("Made Up Words: no active language");
       return;
     }
-    const translated = this.translateToConlang(englishText);
+    const translated = this.translateToConlangWith(englishText, lang);
     const folder = lang.dictionaryFolder;
 
     // If the entry already exists, just open it — don't prompt for POS again
@@ -754,7 +927,12 @@ export default class ConlangPlugin extends Plugin {
     this.refreshPanel();
     this.refreshHighlights();
     this.lastHoverWord = null; // force the next hover to re-resolve against the new index
-    new Notice(`Conlang: created entry "${translated}"`);
+    const isActive = this.settings.activeLanguages.includes(lang.name);
+    new Notice(
+      isActive
+        ? `Made Up Words: created "${translated}" in ${lang.name}`
+        : `Made Up Words: created "${translated}" in ${lang.name} (inactive — activate it to see hover/highlight)`
+    );
   }
 
   private promptForEntryOptions(
@@ -1035,18 +1213,43 @@ export default class ConlangPlugin extends Plugin {
     // 2. Hovered word is an inflected form (in any active language) -> show lemma + label
     // 3. Hovered word is English text matching a definition (any language) -> show all
     // 4. Fall back to forward cypher preview (using primary language's cypher)
+    // Combine matches from BOTH directions across all active languages:
+    //   - conlang direction: the hovered word IS a dictionary headword
+    //   - English direction: the hovered word is a definition of entries
+    // De-duplicated by file path. This way a word that exists in several
+    // languages (e.g. "looked" -> luukid in one language, looked in another)
+    // shows every language's entry in a single tooltip rather than just one.
     const dictEntries = this.dictionary.lookupAll(cleaned);
-    if (dictEntries.length > 0) {
-      if (dictEntries.length === 1) {
-        this.showDictionaryTooltip(evt.clientX, evt.clientY, dictEntries[0]);
-      } else {
-        // Multiple languages share this spelling — show them all with language tags
-        this.showMultiSenseTooltip(evt.clientX, evt.clientY, cleaned, dictEntries);
+    const englishHits = this.dictionary.lookupEnglish(cleaned);
+    const combined: DictionaryEntry[] = [...dictEntries];
+    for (const e of englishHits) {
+      if (!combined.some((c) => c.path === e.path)) combined.push(e);
+    }
+    // Expand to cross-language siblings: other entries that share a definition
+    // with any match. So hovering one language's form (e.g. "Traenslaetis")
+    // also surfaces the same concept in other active languages
+    // (e.g. "Translateees"), since they share the English definition.
+    const seenDefs = new Set<string>();
+    for (const e of [...combined]) {
+      for (const sense of e.definition.split(/[,;]/)) {
+        const key = sense.trim().toLowerCase();
+        if (!key || seenDefs.has(key)) continue;
+        seenDefs.add(key);
+        for (const sib of this.dictionary.lookupEnglish(key)) {
+          if (!combined.some((c) => c.path === sib.path)) combined.push(sib);
+        }
       }
+    }
+    if (combined.length === 1) {
+      this.showDictionaryTooltip(evt.clientX, evt.clientY, combined[0]);
+      return;
+    }
+    if (combined.length > 1) {
+      this.showMultiSenseTooltip(evt.clientX, evt.clientY, cleaned, combined);
       return;
     }
 
-    // Try inflection rules from each active language. First match wins.
+    // No direct/English match — try inflection rules from each active language.
     const activeLanguages = this.getActiveLanguages();
     for (const activeLang of activeLanguages) {
       const inflectionMatch = findInflection(cleaned, this.dictionary, activeLang.inflections);
@@ -1054,16 +1257,6 @@ export default class ConlangPlugin extends Plugin {
         this.showInflectionTooltip(evt.clientX, evt.clientY, inflectionMatch);
         return;
       }
-    }
-
-    const englishHits = this.dictionary.lookupEnglish(cleaned);
-    if (englishHits.length > 0) {
-      if (englishHits.length === 1) {
-        this.showDictionaryTooltip(evt.clientX, evt.clientY, englishHits[0]);
-      } else {
-        this.showMultiSenseTooltip(evt.clientX, evt.clientY, cleaned, englishHits);
-      }
-      return;
     }
 
     // No dictionary match. Respect the user's setting for what to show as

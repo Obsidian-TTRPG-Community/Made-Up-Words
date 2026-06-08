@@ -66,3 +66,22 @@ export function firstSense(definition: string): string {
   return definition.split(/[,;]/)[0].trim();
 }
 
+
+/**
+ * Parse a frontmatter field that may be a YAML list or a comma-separated
+ * string into a clean string array. Trims entries and drops blanks. Returns
+ * undefined when there's nothing usable. Shared by the `parts` and `aliases`
+ * dictionary fields.
+ */
+export function parseStringList(value: unknown): string[] | undefined {
+  let out: string[];
+  if (Array.isArray(value)) {
+    out = value.map((v) => String(v).trim());
+  } else if (typeof value === "string" && value.trim()) {
+    out = value.split(",").map((v) => v.trim());
+  } else {
+    return undefined;
+  }
+  out = out.filter((v) => v.length > 0);
+  return out.length > 0 ? out : undefined;
+}

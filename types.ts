@@ -48,6 +48,11 @@ export interface DictionaryEntry {
   // compounds like "kala-vren" (eye-water = tear), `parts: ["kala", "vren"]`
   // lets the plugin show what each piece means on hover. Free-form list.
   parts?: string[];
+  // Optional: alternate surface forms that resolve to this same entry. Setting
+  // `aliases: ["Feb"]` on a "February" entry makes hover tooltips and
+  // highlighting treat "Feb" exactly like "February". Multi-word aliases are
+  // supported too (they're matched like phrases).
+  aliases?: string[];
 }
 
 export interface InflectionRule {

@@ -240,6 +240,40 @@ function extractBodyPreview(content) {
   return text;
 }
 
+// word-tokens.ts
+var WORD_RE = /\p{L}[\p{L}'-]*/gu;
+function cleanWord(s) {
+  return s.replace(/[^\p{L}'-]/gu, "");
+}
+function isWordChar(ch) {
+  return /[\p{L}'-]/u.test(ch);
+}
+function applyCasing(source, target) {
+  if (source.length === 0 || target.length === 0) return target;
+  if (source === source.toUpperCase() && source !== source.toLowerCase()) {
+    return target.toUpperCase();
+  }
+  if (source[0] === source[0].toUpperCase() && source[0] !== source[0].toLowerCase()) {
+    return target.charAt(0).toUpperCase() + target.slice(1);
+  }
+  return target;
+}
+function firstSense(definition) {
+  return definition.split(/[,;]/)[0].trim();
+}
+function parseStringList(value) {
+  let out;
+  if (Array.isArray(value)) {
+    out = value.map((v) => String(v).trim());
+  } else if (typeof value === "string" && value.trim()) {
+    out = value.split(",").map((v) => v.trim());
+  } else {
+    return void 0;
+  }
+  out = out.filter((v) => v.length > 0);
+  return out.length > 0 ? out : void 0;
+}
+
 // dictionary.ts
 var Dictionary = class {
   constructor(app) {
@@ -394,12 +428,8 @@ var Dictionary = class {
     const word = wordOverride || file.basename;
     const isPhrase = /\s/.test(word);
     const wordCount = word.split(/\s+/).filter((w) => w.length > 0).length;
-    let parts;
-    if (Array.isArray(fm.parts)) {
-      parts = fm.parts.map((p) => String(p).trim()).filter((p) => p.length > 0);
-    } else if (typeof fm.parts === "string" && fm.parts.trim()) {
-      parts = fm.parts.split(",").map((p) => p.trim()).filter((p) => p.length > 0);
-    }
+    const parts = parseStringList(fm.parts);
+    const aliases = parseStringList(fm.aliases);
     return {
       word,
       definition,
@@ -413,11 +443,12 @@ var Dictionary = class {
       nameCategory: asString((_g = fm.nameCategory) != null ? _g : fm.category),
       isPhrase,
       wordCount,
-      parts
+      parts,
+      aliases
     };
   }
   addEntry(entry) {
-    var _a, _b;
+    var _a, _b, _c;
     const key = entry.word.toLowerCase();
     const existing = (_a = this.byWord.get(key)) != null ? _a : [];
     existing.push(entry);
@@ -430,9 +461,30 @@ var Dictionary = class {
         return ((_a2 = b.wordCount) != null ? _a2 : 0) - ((_b2 = a.wordCount) != null ? _b2 : 0);
       });
     }
+    if (entry.aliases) {
+      for (const alias of entry.aliases) {
+        const aliasKey = alias.toLowerCase();
+        if (!aliasKey) continue;
+        const list = (_b = this.byWord.get(aliasKey)) != null ? _b : [];
+        list.push(entry);
+        this.byWord.set(aliasKey, list);
+        if (/\s/.test(alias)) {
+          this.phrases.push({
+            ...entry,
+            word: alias,
+            isPhrase: true,
+            wordCount: alias.split(/\s+/).filter((w) => w.length > 0).length
+          });
+          this.phrases.sort((a, b) => {
+            var _a2, _b2;
+            return ((_a2 = b.wordCount) != null ? _a2 : 0) - ((_b2 = a.wordCount) != null ? _b2 : 0);
+          });
+        }
+      }
+    }
     const englishKeys = entry.definition.split(/[,;]/).map((s) => s.trim().toLowerCase()).filter((s) => s.length > 0);
     for (const k of englishKeys) {
-      const list = (_b = this.byEnglish.get(k)) != null ? _b : [];
+      const list = (_c = this.byEnglish.get(k)) != null ? _c : [];
       list.push(entry);
       this.byEnglish.set(k, list);
     }
@@ -443,6 +495,11 @@ var Dictionary = class {
   static formatTooltip(entry) {
     const parts = [];
     parts.push(`<strong>${escapeHtml(entry.word)}</strong>`);
+    if (entry.aliases && entry.aliases.length > 0) {
+      parts.push(
+        `<span class="conlang-tooltip-aliases">(also: ${entry.aliases.map(escapeHtml).join(", ")})</span>`
+      );
+    }
     if (entry.partOfSpeech) {
       parts.push(`<em>${escapeHtml(entry.partOfSpeech)}</em>`);
     }
@@ -548,28 +605,6 @@ function applyRuleForward(lemma, rule) {
     return patt + lemma;
   }
   return null;
-}
-
-// word-tokens.ts
-var WORD_RE = /\p{L}[\p{L}'-]*/gu;
-function cleanWord(s) {
-  return s.replace(/[^\p{L}'-]/gu, "");
-}
-function isWordChar(ch) {
-  return /[\p{L}'-]/u.test(ch);
-}
-function applyCasing(source, target) {
-  if (source.length === 0 || target.length === 0) return target;
-  if (source === source.toUpperCase() && source !== source.toLowerCase()) {
-    return target.toUpperCase();
-  }
-  if (source[0] === source[0].toUpperCase() && source[0] !== source[0].toLowerCase()) {
-    return target.charAt(0).toUpperCase() + target.slice(1);
-  }
-  return target;
-}
-function firstSense(definition) {
-  return definition.split(/[,;]/)[0].trim();
 }
 
 // phrases.ts
@@ -2762,43 +2797,24 @@ var TranslationPanelView = class extends import_obsidian3.ItemView {
 // entry-modal.ts
 var import_obsidian4 = require("obsidian");
 var COMMON_POS = [
-  {
-    label: "noun",
-    description: "A person, place, thing, or idea. e.g. cat, river, freedom."
-  },
-  {
-    label: "verb",
-    description: "An action or state of being. e.g. run, become, exist."
-  },
-  {
-    label: "adjective",
-    description: "Describes a noun. e.g. red, tall, ancient."
-  },
-  {
-    label: "adverb",
-    description: "Describes a verb, adjective, or other adverb \u2014 usually how, when, where. e.g. quickly, often, here."
-  },
-  {
-    label: "pronoun",
-    description: "Stands in for a noun. e.g. she, they, it, this."
-  },
-  {
-    label: "proper-noun",
-    description: "A specific name. Capitalised in English. e.g. Alice, London, Mars."
-  },
-  {
-    label: "preposition",
-    description: "Shows a relationship between words \u2014 usually spatial, temporal, or logical. e.g. in, on, before, with."
-  },
-  {
-    label: "conjunction",
-    description: "Joins words, phrases, or clauses. e.g. and, but, because."
-  },
-  {
-    label: "interjection",
-    description: "An exclamation expressing emotion or reaction. e.g. oh!, wow, alas."
-  }
+  { label: "noun", description: "A person, place, thing, or idea. e.g. cat, river, freedom." },
+  { label: "verb", description: "An action or state of being. e.g. run, become, exist." },
+  { label: "adjective", description: "Describes a noun. e.g. red, tall, ancient." },
+  { label: "adverb", description: "Describes a verb, adjective, or other adverb. e.g. quickly, often." },
+  { label: "pronoun", description: "Stands in for a noun. e.g. she, they, it, this." },
+  { label: "proper-noun", description: "A specific name, capitalised in English. e.g. Alice, London." },
+  { label: "preposition", description: "Shows a relationship between words. e.g. in, on, before, with." },
+  { label: "conjunction", description: "Joins words, phrases, or clauses. e.g. and, but, because." },
+  { label: "interjection", description: "An exclamation expressing emotion. e.g. oh!, wow, alas." }
 ];
+function buildPosChips(parent, onPick) {
+  const chips = parent.createDiv({ cls: "conlang-modal-chips" });
+  for (const pos of COMMON_POS) {
+    const chip = chips.createEl("button", { text: pos.label, cls: "conlang-modal-chip" });
+    chip.title = pos.description;
+    chip.addEventListener("click", () => onPick(pos.label));
+  }
+}
 var EntryCreationModal = class extends import_obsidian4.Modal {
   constructor(app, englishText, translatedText, resolve) {
     super(app);
@@ -2831,20 +2847,13 @@ var EntryCreationModal = class extends import_obsidian4.Modal {
         this.cancel();
       }
     });
-    const chips = contentEl.createDiv({ cls: "conlang-modal-chips" });
-    for (const pos of COMMON_POS) {
-      const chip = chips.createEl("button", { text: pos.label, cls: "conlang-modal-chip" });
-      chip.title = pos.description;
-      chip.addEventListener("click", () => {
-        this.posInput.value = pos.label;
-        this.posInput.focus();
-      });
-    }
+    buildPosChips(contentEl, (value) => {
+      this.posInput.value = value;
+      this.posInput.focus();
+    });
     const btnRow = contentEl.createDiv({ cls: "conlang-modal-buttons" });
-    const skipBtn = btnRow.createEl("button", { text: "Skip" });
-    skipBtn.addEventListener("click", () => this.submitSkip());
-    const saveBtn = btnRow.createEl("button", { text: "Save", cls: "mod-cta" });
-    saveBtn.addEventListener("click", () => this.submit());
+    btnRow.createEl("button", { text: "Skip" }).addEventListener("click", () => this.submitSkip());
+    btnRow.createEl("button", { text: "Save", cls: "mod-cta" }).addEventListener("click", () => this.submit());
   }
   submit() {
     this.decided = true;
@@ -2854,6 +2863,89 @@ var EntryCreationModal = class extends import_obsidian4.Modal {
   submitSkip() {
     this.decided = true;
     this.resolve({ partOfSpeech: "" });
+    this.close();
+  }
+  cancel() {
+    this.decided = true;
+    this.resolve(null);
+    this.close();
+  }
+  onClose() {
+    if (!this.decided) this.resolve(null);
+    this.contentEl.empty();
+  }
+};
+var MultiEntryModal = class extends import_obsidian4.Modal {
+  constructor(app, englishText, inits, resolve) {
+    super(app);
+    this.decided = false;
+    this.rows = [];
+    this.englishText = englishText;
+    this.inits = inits;
+    this.resolve = resolve;
+  }
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.addClass("conlang-multi-modal");
+    contentEl.createEl("h3", { text: "Save to dictionary" });
+    const preview = contentEl.createDiv({ cls: "conlang-modal-preview" });
+    preview.createSpan({ text: this.englishText, cls: "conlang-modal-source" });
+    contentEl.createEl("p", {
+      cls: "conlang-help",
+      text: "Part of speech (optional, shared across the languages you pick). Lets inflection rules target the right words. Pick one or type your own."
+    });
+    this.posInput = contentEl.createEl("input", { type: "text" });
+    this.posInput.placeholder = "e.g. noun, verb, adjective\u2026";
+    this.posInput.addClass("conlang-modal-input");
+    buildPosChips(contentEl, (value) => {
+      this.posInput.value = value;
+      this.posInput.focus();
+    });
+    contentEl.createEl("p", {
+      cls: "conlang-help",
+      text: "Tick each language to add this word to. Each form is seeded from that language's cypher \u2014 edit it if you want a different spelling."
+    });
+    const list = contentEl.createDiv({ cls: "conlang-modal-langs" });
+    for (const init of this.inits) {
+      const row = list.createDiv({ cls: "conlang-modal-lang-row" });
+      const checkbox = row.createEl("input", { type: "checkbox" });
+      checkbox.checked = init.checked;
+      const labelWrap = row.createDiv({ cls: "conlang-modal-lang-label" });
+      const name = labelWrap.createSpan({ cls: "conlang-modal-lang-name", text: init.languageName });
+      name.addEventListener("click", () => {
+        checkbox.checked = !checkbox.checked;
+      });
+      labelWrap.createSpan({ cls: "conlang-modal-lang-folder", text: init.folder });
+      const formInput = row.createEl("input", { type: "text", value: init.form });
+      formInput.addClass("conlang-modal-lang-form");
+      formInput.placeholder = "conlang form";
+      formInput.addEventListener("input", () => {
+        if (formInput.value.trim()) checkbox.checked = true;
+      });
+      this.rows.push({ init, checkbox, formInput });
+    }
+    setTimeout(() => this.posInput.focus(), 0);
+    contentEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        this.submit();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        this.cancel();
+      }
+    });
+    const btnRow = contentEl.createDiv({ cls: "conlang-modal-buttons" });
+    btnRow.createEl("button", { text: "Cancel" }).addEventListener("click", () => this.cancel());
+    btnRow.createEl("button", { text: "Save", cls: "mod-cta" }).addEventListener("click", () => this.submit());
+  }
+  submit() {
+    const targets = this.rows.filter((r) => r.checkbox.checked && r.formInput.value.trim()).map((r) => ({ languageName: r.init.languageName, form: r.formInput.value.trim() }));
+    if (targets.length === 0) {
+      new import_obsidian4.Notice("Made Up Words: tick at least one language (with a form) to save.");
+      return;
+    }
+    this.decided = true;
+    this.resolve({ partOfSpeech: this.posInput.value.trim(), targets });
     this.close();
   }
   cancel() {
@@ -3496,6 +3588,15 @@ var _ConlangPlugin = class _ConlangPlugin extends import_obsidian8.Plugin {
         );
       }
     });
+    this.registerEvent(
+      this.app.workspace.on("editor-menu", (menu, editor) => {
+        const sel = this.getSelectionOrWord(editor);
+        if (!sel) return;
+        menu.addItem(
+          (item) => item.setTitle("Add to Made Up Words dictionary\u2026").setIcon("plus").onClick(() => this.createEntryFromSelection(editor))
+        );
+      })
+    );
     this.registerDomEvent(document, "mousemove", (evt) => {
       this.onMouseMove(evt);
     });
@@ -3705,6 +3806,10 @@ var _ConlangPlugin = class _ConlangPlugin extends import_obsidian8.Plugin {
   translateToConlang(text) {
     const lang = this.getActiveLanguage();
     if (!lang) return text;
+    return this.translateToConlangWith(text, lang);
+  }
+  /** Translate English text using a specific language's cypher sheets. */
+  translateToConlangWith(text, lang) {
     const replaced = this.replaceEnglishWithDictionary(text);
     return applyCypher(replaced, lang.sheets);
   }
@@ -3855,7 +3960,136 @@ var _ConlangPlugin = class _ConlangPlugin extends import_obsidian8.Plugin {
       new import_obsidian8.Notice("Made Up Words: no selection or word under cursor");
       return;
     }
-    await this.createDictionaryEntryForText(sel.text);
+    await this.openMultiLangEntries(sel.text);
+  }
+  /**
+   * Open the multi-language "Save to dictionary" modal: pick one or more
+   * languages, tweak each cypher-seeded form, set a shared part of speech,
+   * then create one entry per chosen language (each in its own folder).
+   */
+  async openMultiLangEntries(englishText) {
+    const langs = this.settings.languages;
+    if (langs.length === 0) {
+      new import_obsidian8.Notice("Made Up Words: no languages configured");
+      return;
+    }
+    const primary = this.settings.primaryLanguage;
+    const inits = langs.map((l) => ({
+      languageName: l.name,
+      folder: l.dictionaryFolder,
+      form: this.translateToConlangWith(englishText, l),
+      checked: l.name === primary
+    }));
+    const result = await new Promise((resolve) => {
+      new MultiEntryModal(this.app, englishText, inits, resolve).open();
+    });
+    if (!result) return;
+    const created = [];
+    const errors = [];
+    let firstPath = null;
+    for (const target of result.targets) {
+      const lang = langs.find((l) => l.name === target.languageName);
+      if (!lang) continue;
+      const r = await this.createOneEntry({
+        englishText,
+        lang,
+        conlangForm: target.form,
+        partOfSpeech: result.partOfSpeech
+      });
+      if (r.ok) {
+        created.push(`${target.form} (${lang.name}${r.created ? "" : ", existing"})`);
+        if (!firstPath) firstPath = r.path;
+      } else {
+        errors.push(`${lang.name}: ${r.error}`);
+      }
+    }
+    await this.afterEntriesChanged();
+    if (firstPath) {
+      const f = this.app.vault.getAbstractFileByPath(firstPath);
+      if (f instanceof import_obsidian8.TFile) await this.app.workspace.getLeaf(false).openFile(f);
+    }
+    if (errors.length > 0) {
+      new import_obsidian8.Notice(
+        `Made Up Words: ${created.length} saved, ${errors.length} failed \u2014 ${errors.join("; ")}`,
+        9e3
+      );
+    } else {
+      new import_obsidian8.Notice(
+        `Made Up Words: saved ${created.length} ${created.length === 1 ? "entry" : "entries"}`,
+        5e3
+      );
+    }
+  }
+  /**
+   * Create one dictionary entry file. Robustly ensures the target folder
+   * exists and reports failures instead of throwing. Returns created=false
+   * when an entry with that form already exists.
+   */
+  async createOneEntry(p) {
+    const form = p.conlangForm.trim();
+    if (!form) return { ok: false, error: "empty conlang form" };
+    const folder = p.lang.dictionaryFolder;
+    const safeName = form.replace(/[\\/:*?"<>|]/g, "_");
+    const path = `${folder}/${safeName}.md`;
+    try {
+      await this.ensureFolderStrict(folder);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return { ok: false, error: `couldn't create folder "${folder}": ${msg}` };
+    }
+    const existing = this.app.vault.getAbstractFileByPath(path);
+    if (existing instanceof import_obsidian8.TFile) return { ok: true, created: false, path };
+    const content = [
+      "---",
+      `definition: ${p.englishText}`,
+      `language: ${p.lang.name}`,
+      `partOfSpeech: ${p.partOfSpeech}`,
+      "ipa: ",
+      "etymology: ",
+      "---",
+      "",
+      `# ${form}`,
+      "",
+      `Translates *${p.englishText}*.`,
+      ""
+    ].join("\n");
+    try {
+      const file = await this.app.vault.create(path, content);
+      await this.waitForFrontmatter(file);
+      return { ok: true, created: true, path };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return { ok: false, error: `couldn't create "${path}": ${msg}` };
+    }
+  }
+  /** Reload the dictionary + refresh UI after entries were added/changed. */
+  async afterEntriesChanged() {
+    await this.reloadActiveLanguage();
+    this.refreshPanel();
+    this.refreshHighlights();
+    this.lastHoverWord = null;
+  }
+  /**
+   * Ensure a (possibly nested) folder exists, creating each missing level.
+   * Throws on a real failure (unlike ensureFolder, which is best-effort) so
+   * callers can surface the error to the user.
+   */
+  async ensureFolderStrict(path) {
+    const parts = path.split("/").filter((p) => p.length > 0);
+    let current = "";
+    for (const part of parts) {
+      current = current ? `${current}/${part}` : part;
+      const existing = this.app.vault.getAbstractFileByPath(current);
+      if (existing instanceof import_obsidian8.TFolder) continue;
+      if (existing) throw new Error(`"${current}" exists but is not a folder`);
+      try {
+        await this.app.vault.createFolder(current);
+      } catch (e) {
+        if (!(this.app.vault.getAbstractFileByPath(current) instanceof import_obsidian8.TFolder)) {
+          throw e;
+        }
+      }
+    }
   }
   /**
    * Open the lookup modal for the selected text or word under cursor.
@@ -3936,13 +4170,13 @@ var _ConlangPlugin = class _ConlangPlugin extends import_obsidian8.Plugin {
   /**
    * Public so the panel button can call it.
    */
-  async createDictionaryEntryForText(englishText) {
-    const lang = this.getActiveLanguage();
+  async createDictionaryEntryForText(englishText, targetLang) {
+    const lang = targetLang != null ? targetLang : this.getActiveLanguage();
     if (!lang) {
       new import_obsidian8.Notice("Made Up Words: no active language");
       return;
     }
-    const translated = this.translateToConlang(englishText);
+    const translated = this.translateToConlangWith(englishText, lang);
     const folder = lang.dictionaryFolder;
     const safeName = translated.replace(/[\\/:*?"<>|]/g, "_");
     const path = `${folder}/${safeName}.md`;
@@ -3976,7 +4210,10 @@ var _ConlangPlugin = class _ConlangPlugin extends import_obsidian8.Plugin {
     this.refreshPanel();
     this.refreshHighlights();
     this.lastHoverWord = null;
-    new import_obsidian8.Notice(`Conlang: created entry "${translated}"`);
+    const isActive = this.settings.activeLanguages.includes(lang.name);
+    new import_obsidian8.Notice(
+      isActive ? `Made Up Words: created "${translated}" in ${lang.name}` : `Made Up Words: created "${translated}" in ${lang.name} (inactive \u2014 activate it to see hover/highlight)`
+    );
   }
   promptForEntryOptions(englishText, translated) {
     return new Promise((resolve) => {
@@ -4212,12 +4449,28 @@ var _ConlangPlugin = class _ConlangPlugin extends import_obsidian8.Plugin {
       }
     }
     const dictEntries = this.dictionary.lookupAll(cleaned);
-    if (dictEntries.length > 0) {
-      if (dictEntries.length === 1) {
-        this.showDictionaryTooltip(evt.clientX, evt.clientY, dictEntries[0]);
-      } else {
-        this.showMultiSenseTooltip(evt.clientX, evt.clientY, cleaned, dictEntries);
+    const englishHits = this.dictionary.lookupEnglish(cleaned);
+    const combined = [...dictEntries];
+    for (const e of englishHits) {
+      if (!combined.some((c) => c.path === e.path)) combined.push(e);
+    }
+    const seenDefs = /* @__PURE__ */ new Set();
+    for (const e of [...combined]) {
+      for (const sense of e.definition.split(/[,;]/)) {
+        const key = sense.trim().toLowerCase();
+        if (!key || seenDefs.has(key)) continue;
+        seenDefs.add(key);
+        for (const sib of this.dictionary.lookupEnglish(key)) {
+          if (!combined.some((c) => c.path === sib.path)) combined.push(sib);
+        }
       }
+    }
+    if (combined.length === 1) {
+      this.showDictionaryTooltip(evt.clientX, evt.clientY, combined[0]);
+      return;
+    }
+    if (combined.length > 1) {
+      this.showMultiSenseTooltip(evt.clientX, evt.clientY, cleaned, combined);
       return;
     }
     const activeLanguages = this.getActiveLanguages();
@@ -4227,15 +4480,6 @@ var _ConlangPlugin = class _ConlangPlugin extends import_obsidian8.Plugin {
         this.showInflectionTooltip(evt.clientX, evt.clientY, inflectionMatch);
         return;
       }
-    }
-    const englishHits = this.dictionary.lookupEnglish(cleaned);
-    if (englishHits.length > 0) {
-      if (englishHits.length === 1) {
-        this.showDictionaryTooltip(evt.clientX, evt.clientY, englishHits[0]);
-      } else {
-        this.showMultiSenseTooltip(evt.clientX, evt.clientY, cleaned, englishHits);
-      }
-      return;
     }
     if (this.settings.hoverFallback === "nothing") {
       this.scheduleHideTooltip();

@@ -10,6 +10,7 @@
 //   ipa: /ˈka.la/
 //   etymology: from proto-form *kal-
 //   language: Example
+//   aliases: Feb, Febr        # optional: alternate forms that resolve here
 //   ---
 //
 // Body of the note can contain freeform usage notes; we include it as `notes`.
@@ -17,6 +18,7 @@
 import { App, TFile, TFolder, getAllTags, CachedMetadata } from "obsidian";
 import { DictionaryEntry } from "./types";
 import { extractBodyPreview as _extractBodyPreview } from "./body-preview";
+import { parseStringList } from "./word-tokens";
 
 export class Dictionary {
   // Conlang lookup: multiple entries possible when multiple languages
@@ -196,14 +198,10 @@ export class Dictionary {
     const isPhrase = /\s/.test(word);
     const wordCount = word.split(/\s+/).filter((w) => w.length > 0).length;
 
-    // Optional `parts` field for transparent compounds. Accepts YAML list
-    // or comma-separated string.
-    let parts: string[] | undefined;
-    if (Array.isArray(fm.parts)) {
-      parts = fm.parts.map((p: any) => String(p).trim()).filter((p: string) => p.length > 0);
-    } else if (typeof fm.parts === "string" && fm.parts.trim()) {
-      parts = fm.parts.split(",").map((p: string) => p.trim()).filter((p: string) => p.length > 0);
-    }
+    // Optional `parts` (transparent-compound members) and `aliases` (alternate
+    // surface forms). Both accept a YAML list or a comma-separated string.
+    const parts = parseStringList(fm.parts);
+    const aliases = parseStringList(fm.aliases);
 
     return {
       word,
@@ -219,6 +217,7 @@ export class Dictionary {
       isPhrase,
       wordCount,
       parts,
+      aliases,
     };
   }
 
@@ -233,6 +232,27 @@ export class Dictionary {
       // Maintain phrase list sorted by word count descending so the matcher
       // can walk it in priority order.
       this.phrases.sort((a, b) => (b.wordCount ?? 0) - (a.wordCount ?? 0));
+    }
+
+    // Index any aliases so they resolve to this same entry. A multi-word alias
+    // is also registered as a phrase so the phrase matcher can catch it.
+    if (entry.aliases) {
+      for (const alias of entry.aliases) {
+        const aliasKey = alias.toLowerCase();
+        if (!aliasKey) continue;
+        const list = this.byWord.get(aliasKey) ?? [];
+        list.push(entry);
+        this.byWord.set(aliasKey, list);
+        if (/\s/.test(alias)) {
+          this.phrases.push({
+            ...entry,
+            word: alias,
+            isPhrase: true,
+            wordCount: alias.split(/\s+/).filter((w) => w.length > 0).length,
+          });
+          this.phrases.sort((a, b) => (b.wordCount ?? 0) - (a.wordCount ?? 0));
+        }
+      }
     }
     // Index English definition: split on commas/semicolons so "water, liquid"
     // becomes two lookups.
@@ -253,6 +273,13 @@ export class Dictionary {
   static formatTooltip(entry: DictionaryEntry): string {
     const parts: string[] = [];
     parts.push(`<strong>${escapeHtml(entry.word)}</strong>`);
+    if (entry.aliases && entry.aliases.length > 0) {
+      parts.push(
+        `<span class="conlang-tooltip-aliases">(also: ${entry.aliases
+          .map(escapeHtml)
+          .join(", ")})</span>`
+      );
+    }
     if (entry.partOfSpeech) {
       parts.push(`<em>${escapeHtml(entry.partOfSpeech)}</em>`);
     }

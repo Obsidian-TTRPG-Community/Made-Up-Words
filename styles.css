@@ -1549,3 +1549,61 @@ body.conlang-hl-background .conlang-known-word.is-phrase {
   padding: 4px 12px 12px 12px;
   border-top: 1px solid var(--background-modifier-border);
 }
+
+/* Alias list shown in hover tooltips, e.g. "February (also: Feb)" */
+.conlang-tooltip-aliases {
+  font-size: 0.85em;
+  color: var(--text-muted);
+  font-style: italic;
+  margin-left: 4px;
+}
+
+/* ===== Multi-language "Save to dictionary" modal ===== */
+.conlang-multi-modal .conlang-modal-langs {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 6px 0 4px 0;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.conlang-modal-lang-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--background-secondary);
+}
+
+.conlang-modal-lang-row input[type="checkbox"] {
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+.conlang-modal-lang-label {
+  display: flex;
+  flex-direction: column;
+  min-width: 120px;
+  flex: 0 0 auto;
+}
+
+.conlang-modal-lang-name {
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.conlang-modal-lang-name:hover {
+  color: var(--text-accent);
+}
+
+.conlang-modal-lang-folder {
+  font-size: 0.75em;
+  color: var(--text-faint);
+}
+
+.conlang-modal-lang-form {
+  flex: 1 1 auto;
+  min-width: 0;
+}
