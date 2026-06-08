@@ -1,0 +1,60 @@
+name: Release Obsidian plugin
+
+# Builds the plugin and creates a DRAFT GitHub release with the three required
+# assets whenever a version tag is pushed (e.g. `git push origin 0.16.0`).
+# Tags are un-prefixed to match manifest.json's version, as Obsidian requires.
+on:
+  push:
+    tags:
+      - "*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build plugin
+        run: npm run build
+
+      - name: Verify tag matches manifest version
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          MANIFEST_VERSION="$(node -p "require('./manifest.json').version")"
+          if [ "$TAG" != "$MANIFEST_VERSION" ]; then
+            echo "::error::Tag '$TAG' does not match manifest.json version '$MANIFEST_VERSION'."
+            exit 1
+          fi
+          echo "Tag and manifest version match: $TAG"
+
+      - name: Create draft release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          NOTES_FILE="RELEASE_NOTES_v${TAG}.md"
+          if [ -f "$NOTES_FILE" ]; then
+            gh release create "$TAG" \
+              --draft \
+              --title "$TAG" \
+              --notes-file "$NOTES_FILE" \
+              main.js manifest.json styles.css
+          else
+            gh release create "$TAG" \
+              --draft \
+              --title "$TAG" \
+              --notes "Draft release for $TAG. Add release notes before publishing." \
+              main.js manifest.json styles.css
+          fi
