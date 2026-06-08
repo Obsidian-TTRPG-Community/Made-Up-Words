@@ -115,6 +115,21 @@ export interface ConlangSettings {
   // Set to true after the user has seen the first-run welcome notice.
   // Persisted in settings so the message only appears once per install.
   hasSeenWelcome?: boolean;
+  // === Known-word highlighting (v0.16) ===
+  // Master switch: visually mark words in notes that the plugin recognises,
+  // both in the editor (Live Preview / Source) and in Reading view.
+  highlightKnownWords: boolean;
+  // Visual treatment for highlighted words. "underline" = subtle dotted
+  // underline + accent colour (default, least intrusive), "italic" = render
+  // in italics, "background" = faint highlighter background.
+  highlightStyle: "underline" | "italic" | "background";
+  // Highlight conlang headwords — words that exist as dictionary entries in
+  // any active language (including inflected forms and known phrases).
+  highlightConlang: boolean;
+  // Highlight English terms the dictionary can translate (e.g. "cat" when a
+  // word meaning cat exists). Useful for spotting "I have a word for this",
+  // but noisier in English-heavy notes.
+  highlightEnglish: boolean;
 }
 
 export const DEFAULT_SETTINGS: ConlangSettings = {
@@ -168,4 +183,8 @@ export const DEFAULT_SETTINGS: ConlangSettings = {
   commitWrapper: "html-tooltip",
   hoverModifier: "shift",
   hoverFallback: "cypher",
+  highlightKnownWords: true,
+  highlightStyle: "underline",
+  highlightConlang: true,
+  highlightEnglish: true,
 };

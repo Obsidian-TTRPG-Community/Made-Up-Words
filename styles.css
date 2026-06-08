@@ -1316,3 +1316,236 @@
   color: var(--text-faint);
   font-style: italic;
 }
+
+/* ===== Known-word highlighting ===== */
+/*
+   Spans get the base class .conlang-known-word plus a kind modifier
+   (.is-conlang / .is-english / .is-phrase). The visual treatment is chosen
+   by a body-level class (conlang-hl-underline / -italic / -background) set
+   from settings, so the appearance is pure CSS with no inline styles.
+
+   Override any of these in a theme or CSS snippet to recolour or restyle.
+   Custom properties make the common case (just change the colour) a one-liner.
+*/
+:root {
+  --conlang-known-color: var(--text-accent);
+  --conlang-known-english-color: var(--text-muted);
+  --conlang-known-bg: hsla(var(--accent-h), var(--accent-s), var(--accent-l), 0.30);
+  --conlang-known-english-bg: var(--background-modifier-hover);
+}
+
+/* Underline style (default) */
+body.conlang-hl-underline .conlang-known-word.is-conlang {
+  text-decoration-line: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: var(--conlang-known-color);
+  text-underline-offset: 2px;
+  color: var(--conlang-known-color);
+}
+body.conlang-hl-underline .conlang-known-word.is-english {
+  text-decoration-line: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: var(--conlang-known-english-color);
+  text-underline-offset: 2px;
+}
+
+/* Italic style */
+body.conlang-hl-italic .conlang-known-word.is-conlang {
+  font-style: italic;
+  color: var(--conlang-known-color);
+}
+body.conlang-hl-italic .conlang-known-word.is-english {
+  font-style: italic;
+}
+
+/* Background style */
+body.conlang-hl-background .conlang-known-word {
+  border-radius: 3px;
+  padding: 0 2px;
+}
+body.conlang-hl-background .conlang-known-word.is-conlang {
+  background-color: var(--conlang-known-bg);
+}
+body.conlang-hl-background .conlang-known-word.is-english {
+  background-color: var(--conlang-known-english-bg);
+}
+
+/* Phrases: a touch heavier so multi-word entries stand out from single words.
+   Applies on top of whichever style variant is active. */
+body.conlang-hl-underline .conlang-known-word.is-phrase {
+  text-decoration-style: solid;
+}
+body.conlang-hl-background .conlang-known-word.is-phrase {
+  font-weight: 600;
+}
+
+/* ===== Settings layout (v0.16 refresh) ===== */
+
+.conlang-settings .conlang-help {
+  font-size: 0.85em;
+  color: var(--text-muted);
+  margin: 4px 0 10px 0;
+  line-height: 1.4;
+}
+
+/* Top language overview */
+.conlang-lang-overview {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 6px 0 14px 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: var(--background-secondary);
+}
+
+.conlang-lang-overview-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 3px 0;
+}
+
+.conlang-lang-overview-star {
+  cursor: pointer;
+  color: var(--text-faint);
+  font-size: 1.05em;
+  user-select: none;
+  line-height: 1;
+}
+
+.conlang-lang-overview-star.is-primary {
+  color: var(--interactive-accent);
+}
+
+.conlang-lang-overview-star:hover {
+  color: var(--text-accent);
+}
+
+.conlang-lang-overview-name {
+  cursor: pointer;
+  flex: 1;
+}
+
+.conlang-lang-overview-name:hover {
+  color: var(--text-accent);
+}
+
+/* Status badges */
+.conlang-badge {
+  font-size: 0.7em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 10px;
+  background: var(--background-modifier-border);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.conlang-badge-active {
+  background: var(--background-modifier-success, var(--background-modifier-border));
+  color: var(--text-normal);
+}
+
+.conlang-badge-primary {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
+/* Language cards (accordion) */
+.conlang-card {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  margin: 8px 0;
+  background: var(--background-primary);
+  overflow: hidden;
+}
+
+.conlang-card[open] {
+  background: var(--background-secondary);
+}
+
+.conlang-card-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  font-weight: 600;
+}
+
+.conlang-card-summary::-webkit-details-marker {
+  display: none;
+}
+
+.conlang-card-summary::before {
+  content: "▸";
+  color: var(--text-faint);
+  transition: transform 0.1s ease;
+}
+
+.conlang-card[open] > .conlang-card-summary::before {
+  transform: rotate(90deg);
+}
+
+.conlang-card-title {
+  font-size: 1.05em;
+}
+
+.conlang-card-count {
+  margin-left: auto;
+  font-size: 0.8em;
+  color: var(--text-faint);
+  font-weight: 400;
+}
+
+.conlang-card-body {
+  padding: 4px 14px 14px 14px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+/* Nested collapsibles (cypher sheets / inflection rules) */
+.conlang-subcollapse {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  margin: 10px 0;
+  background: var(--background-primary);
+}
+
+.conlang-subcollapse-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  font-weight: 600;
+}
+
+.conlang-subcollapse-summary::-webkit-details-marker {
+  display: none;
+}
+
+.conlang-subcollapse-summary::before {
+  content: "▸";
+  color: var(--text-faint);
+  transition: transform 0.1s ease;
+}
+
+.conlang-subcollapse[open] > .conlang-subcollapse-summary::before {
+  transform: rotate(90deg);
+}
+
+.conlang-subcollapse-title {
+  flex: 1;
+}
+
+.conlang-subcollapse-body {
+  padding: 4px 12px 12px 12px;
+  border-top: 1px solid var(--background-modifier-border);
+}

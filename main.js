@@ -79,7 +79,11 @@ var DEFAULT_SETTINGS = {
   primaryLanguage: "Example",
   commitWrapper: "html-tooltip",
   hoverModifier: "shift",
-  hoverFallback: "cypher"
+  hoverFallback: "cypher",
+  highlightKnownWords: true,
+  highlightStyle: "underline",
+  highlightConlang: true,
+  highlightEnglish: true
 };
 
 // cypher.ts
@@ -726,57 +730,189 @@ function findPreset(id) {
 var ConlangSettingTab = class extends import_obsidian2.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
+    // Persist expand/collapse state across re-renders, keyed by language name.
+    this.openCards = /* @__PURE__ */ new Set();
+    this.openSheets = /* @__PURE__ */ new Set();
+    this.openInflections = /* @__PURE__ */ new Set();
     this.plugin = plugin;
   }
   display() {
     const { containerEl } = this;
     containerEl.empty();
+    containerEl.addClass("conlang-settings");
     containerEl.createEl("h2", { text: "Made Up Words" });
+    this.renderLanguageOverview(containerEl);
+    this.renderHoverSection(containerEl);
+    this.renderHighlightSection(containerEl);
+    this.renderTranslationSection(containerEl);
+    containerEl.createEl("h3", { text: "Per-language settings" });
+    containerEl.createEl("p", {
+      cls: "conlang-help",
+      text: "Each language is a card below. Expand one to edit its dictionary folder, cypher sheets, and inflection rules."
+    });
+    for (let i = 0; i < this.plugin.settings.languages.length; i++) {
+      this.renderLanguageCard(containerEl, this.plugin.settings.languages[i], i);
+    }
+  }
+  // ===== Top overview =====
+  renderLanguageOverview(containerEl) {
+    containerEl.createEl("h3", { text: "Languages" });
     new import_obsidian2.Setting(containerEl).setName("Active languages").setDesc(
-      "Choose which languages are 'live': hover, lookup, and dictionary browsing include all active languages. Toggle each one on or off."
+      "Active languages contribute to hover, lookup, dictionary browsing, and highlighting. Tick to activate; click the star to set the primary."
     );
-    const activeListEl = containerEl.createDiv({ cls: "conlang-active-list" });
+    const list = containerEl.createDiv({ cls: "conlang-lang-overview" });
     for (const lang of this.plugin.settings.languages) {
-      const row = activeListEl.createDiv({ cls: "conlang-active-row" });
+      const isActive = this.plugin.settings.activeLanguages.includes(lang.name);
+      const isPrimary = this.plugin.settings.primaryLanguage === lang.name;
+      const row = list.createDiv({ cls: "conlang-lang-overview-row" });
       const cb = row.createEl("input", { type: "checkbox" });
-      cb.checked = this.plugin.settings.activeLanguages.includes(lang.name);
+      cb.checked = isActive;
       cb.addEventListener("change", async () => {
-        var _a;
-        const set = new Set(this.plugin.settings.activeLanguages);
-        if (cb.checked) set.add(lang.name);
-        else set.delete(lang.name);
-        this.plugin.settings.activeLanguages = Array.from(set);
-        if (!this.plugin.settings.activeLanguages.includes(
-          this.plugin.settings.primaryLanguage
-        )) {
-          this.plugin.settings.primaryLanguage = (_a = this.plugin.settings.activeLanguages[0]) != null ? _a : "";
-        }
-        if (this.plugin.settings.activeLanguages.length === 0) {
-          this.plugin.settings.activeLanguages = [lang.name];
-          this.plugin.settings.primaryLanguage = lang.name;
-          cb.checked = true;
-          new import_obsidian2.Notice("Made Up Words: at least one language must be active.");
-        }
-        await this.plugin.saveSettings();
-        await this.plugin.reloadActiveLanguage();
+        await this.toggleActive(lang.name, cb.checked);
         this.display();
       });
-      const label = row.createEl("label", { text: lang.name });
-      label.addEventListener("click", () => cb.click());
-    }
-    new import_obsidian2.Setting(containerEl).setName("Primary language").setDesc(
-      "Used as the target for English\u2192conlang translation and as the default save folder for new entries. Must be one of the active languages."
-    ).addDropdown((dd) => {
-      const active = this.plugin.settings.activeLanguages;
-      for (const name of active) {
-        dd.addOption(name, name);
+      const star = row.createSpan({
+        cls: "conlang-lang-overview-star" + (isPrimary ? " is-primary" : ""),
+        text: isPrimary ? "\u2605" : "\u2606"
+      });
+      star.setAttribute("aria-label", "Set as primary language");
+      star.addEventListener("click", async () => {
+        if (!this.plugin.settings.activeLanguages.includes(lang.name)) {
+          await this.toggleActive(lang.name, true);
+        }
+        this.plugin.settings.primaryLanguage = lang.name;
+        await this.plugin.saveSettings();
+        this.display();
+      });
+      const name = row.createSpan({ cls: "conlang-lang-overview-name", text: lang.name });
+      name.addEventListener("click", () => cb.click());
+      if (isPrimary) {
+        row.createSpan({ cls: "conlang-badge conlang-badge-primary", text: "primary" });
+      } else if (isActive) {
+        row.createSpan({ cls: "conlang-badge conlang-badge-active", text: "active" });
+      } else {
+        row.createSpan({ cls: "conlang-badge", text: "inactive" });
       }
-      dd.setValue(this.plugin.settings.primaryLanguage);
+    }
+    new import_obsidian2.Setting(containerEl).addButton(
+      (btn) => btn.setButtonText("Add language").setCta().onClick(async () => {
+        const newName = this.uniqueLanguageName();
+        this.plugin.settings.languages.push({
+          name: newName,
+          dictionaryFolder: `Made Up Words/${newName}`,
+          hoverEnabled: true,
+          sheets: []
+        });
+        this.openCards.add(newName);
+        await this.plugin.saveSettings();
+        this.display();
+      })
+    ).addButton(
+      (btn) => btn.setButtonText("Reload dictionaries").onClick(async () => {
+        const n = await this.plugin.reloadActiveLanguage();
+        this.plugin.refreshPanel();
+        this.plugin.refreshHighlights();
+        new import_obsidian2.Notice(`Made Up Words: loaded ${n} dictionary entries`);
+      })
+    );
+  }
+  uniqueLanguageName() {
+    const names = new Set(this.plugin.settings.languages.map((l) => l.name));
+    let i = this.plugin.settings.languages.length + 1;
+    let name = `Language ${i}`;
+    while (names.has(name)) name = `Language ${++i}`;
+    return name;
+  }
+  /** Toggle a language's active state, keeping primary valid and reloading. */
+  async toggleActive(name, active) {
+    const set = new Set(this.plugin.settings.activeLanguages);
+    if (active) set.add(name);
+    else set.delete(name);
+    let listed = Array.from(set);
+    if (listed.length === 0) {
+      listed = [name];
+      new import_obsidian2.Notice("Made Up Words: at least one language must stay active.");
+    }
+    this.plugin.settings.activeLanguages = listed;
+    if (!listed.includes(this.plugin.settings.primaryLanguage)) {
+      this.plugin.settings.primaryLanguage = listed[0];
+    }
+    await this.plugin.saveSettings();
+    await this.plugin.reloadActiveLanguage();
+    this.plugin.refreshPanel();
+    this.plugin.refreshHighlights();
+  }
+  // ===== Behaviour sections =====
+  renderHoverSection(containerEl) {
+    containerEl.createEl("h3", { text: "Hover tooltips" });
+    new import_obsidian2.Setting(containerEl).setName("Hover modifier key").setDesc(
+      "Hold this key while hovering to see translation tooltips. 'None' shows a tooltip on any hover. Hover can also be turned off per language in each card below."
+    ).addDropdown((dd) => {
+      dd.addOption("none", "None (always show)");
+      dd.addOption("shift", "Shift");
+      dd.addOption("alt", "Alt / Option");
+      dd.addOption("ctrl", "Ctrl / Cmd");
+      dd.setValue(this.plugin.settings.hoverModifier);
       dd.onChange(async (value) => {
-        this.plugin.settings.primaryLanguage = value;
+        this.plugin.settings.hoverModifier = value;
         await this.plugin.saveSettings();
       });
     });
+    new import_obsidian2.Setting(containerEl).setName("Fallback for unknown words").setDesc(
+      "What to show when you hover a word that isn't in the dictionary. 'Cypher preview' shows a phonological placeholder; 'Nothing' shows no tooltip."
+    ).addDropdown((dd) => {
+      dd.addOption("cypher", "Cypher preview");
+      dd.addOption("nothing", "Nothing");
+      dd.setValue(this.plugin.settings.hoverFallback);
+      dd.onChange(async (value) => {
+        this.plugin.settings.hoverFallback = value;
+        await this.plugin.saveSettings();
+      });
+    });
+  }
+  renderHighlightSection(containerEl) {
+    containerEl.createEl("h3", { text: "Highlighting" });
+    new import_obsidian2.Setting(containerEl).setName("Highlight known words in notes").setDesc(
+      "Visually mark recognised words in both the editor and Reading view."
+    ).addToggle(
+      (tg) => tg.setValue(this.plugin.settings.highlightKnownWords).onChange(async (v) => {
+        this.plugin.settings.highlightKnownWords = v;
+        await this.plugin.saveSettings();
+        this.display();
+      })
+    );
+    if (!this.plugin.settings.highlightKnownWords) return;
+    new import_obsidian2.Setting(containerEl).setName("Highlight style").setDesc(
+      "How highlighted words look. Themeable via the .conlang-known-word CSS class."
+    ).addDropdown((dd) => {
+      dd.addOption("underline", "Dotted underline + colour");
+      dd.addOption("italic", "Italics");
+      dd.addOption("background", "Background highlight");
+      dd.setValue(this.plugin.settings.highlightStyle);
+      dd.onChange(async (value) => {
+        this.plugin.settings.highlightStyle = value;
+        await this.plugin.saveSettings();
+      });
+    });
+    new import_obsidian2.Setting(containerEl).setName("Highlight conlang words").setDesc(
+      "Mark words that exist as dictionary entries (including inflected forms and phrases)."
+    ).addToggle(
+      (tg) => tg.setValue(this.plugin.settings.highlightConlang).onChange(async (v) => {
+        this.plugin.settings.highlightConlang = v;
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian2.Setting(containerEl).setName("Highlight translatable English words").setDesc(
+      "Mark English words the dictionary can translate. Handy for spotting coverage, but noisier in English-heavy notes."
+    ).addToggle(
+      (tg) => tg.setValue(this.plugin.settings.highlightEnglish).onChange(async (v) => {
+        this.plugin.settings.highlightEnglish = v;
+        await this.plugin.saveSettings();
+      })
+    );
+  }
+  renderTranslationSection(containerEl) {
+    containerEl.createEl("h3", { text: "Translation" });
     new import_obsidian2.Setting(containerEl).setName("Commit wrapper").setDesc(
       "How committed translations are stored in the note. HTML tooltip is recommended (uses native <abbr> tags)."
     ).addDropdown((dd) => {
@@ -789,113 +925,134 @@ var ConlangSettingTab = class extends import_obsidian2.PluginSettingTab {
         await this.plugin.saveSettings();
       });
     });
-    new import_obsidian2.Setting(containerEl).setName("Hover modifier key").setDesc(
-      "Hold this key while hovering to see translation tooltips. Use 'None' to show tooltips on any hover (the old behaviour)."
-    ).addDropdown((dd) => {
-      dd.addOption("none", "None (always show)");
-      dd.addOption("shift", "Shift");
-      dd.addOption("alt", "Alt / Option");
-      dd.addOption("ctrl", "Ctrl / Cmd");
-      dd.setValue(this.plugin.settings.hoverModifier);
-      dd.onChange(async (value) => {
-        this.plugin.settings.hoverModifier = value;
-        await this.plugin.saveSettings();
-      });
-    });
-    new import_obsidian2.Setting(containerEl).setName("Hover fallback for unknown words").setDesc(
-      "What to show when you hover a word that isn't in the dictionary. 'Cypher preview' shows a phonological placeholder; 'Nothing' shows no tooltip at all."
-    ).addDropdown((dd) => {
-      dd.addOption("cypher", "Cypher preview");
-      dd.addOption("nothing", "Nothing");
-      dd.setValue(this.plugin.settings.hoverFallback);
-      dd.onChange(async (value) => {
-        this.plugin.settings.hoverFallback = value;
-        await this.plugin.saveSettings();
-      });
-    });
-    new import_obsidian2.Setting(containerEl).setName("Add new language").addButton(
-      (btn) => btn.setButtonText("Add language").setCta().onClick(async () => {
-        const newName = `Language ${this.plugin.settings.languages.length + 1}`;
-        this.plugin.settings.languages.push({
-          name: newName,
-          dictionaryFolder: `Made Up Words/${newName}`,
-          hoverEnabled: true,
-          sheets: []
-        });
-        await this.plugin.saveSettings();
-        this.display();
-      })
-    );
-    for (let i = 0; i < this.plugin.settings.languages.length; i++) {
-      this.renderLanguage(containerEl, this.plugin.settings.languages[i], i);
-    }
   }
-  renderLanguage(parent, lang, index) {
-    const wrap = parent.createDiv({ cls: "conlang-language-panel" });
-    wrap.createEl("h3", { text: lang.name });
-    new import_obsidian2.Setting(wrap).setName("Name").addText(
+  // ===== Collapsible helper =====
+  collapsible(parent, opts) {
+    const details = parent.createEl("details", { cls: "conlang-subcollapse" });
+    if (opts.store.has(opts.key)) details.open = true;
+    details.addEventListener("toggle", () => {
+      if (details.open) opts.store.add(opts.key);
+      else opts.store.delete(opts.key);
+    });
+    const summary = details.createEl("summary", { cls: "conlang-subcollapse-summary" });
+    summary.createSpan({ cls: "conlang-subcollapse-title", text: opts.title });
+    if (opts.badge != null) {
+      summary.createSpan({ cls: "conlang-badge", text: opts.badge });
+    }
+    return details.createDiv({ cls: "conlang-subcollapse-body" });
+  }
+  // ===== Per-language card =====
+  renderLanguageCard(parent, lang, index) {
+    const isActive = this.plugin.settings.activeLanguages.includes(lang.name);
+    const isPrimary = this.plugin.settings.primaryLanguage === lang.name;
+    const card = parent.createEl("details", { cls: "conlang-card" });
+    if (this.openCards.has(lang.name)) card.open = true;
+    card.addEventListener("toggle", () => {
+      if (card.open) this.openCards.add(lang.name);
+      else this.openCards.delete(lang.name);
+    });
+    const summary = card.createEl("summary", { cls: "conlang-card-summary" });
+    summary.createSpan({ cls: "conlang-card-title", text: lang.name });
+    if (isPrimary) {
+      summary.createSpan({ cls: "conlang-badge conlang-badge-primary", text: "primary" });
+    } else if (isActive) {
+      summary.createSpan({ cls: "conlang-badge conlang-badge-active", text: "active" });
+    } else {
+      summary.createSpan({ cls: "conlang-badge", text: "inactive" });
+    }
+    if (isActive) {
+      const count = this.plugin.dictionary.allEntries().filter((e) => e.language === lang.name).length;
+      summary.createSpan({
+        cls: "conlang-card-count",
+        text: `${count} ${count === 1 ? "entry" : "entries"}`
+      });
+    }
+    const body = card.createDiv({ cls: "conlang-card-body" });
+    new import_obsidian2.Setting(body).setName("Name").addText(
       (t) => t.setValue(lang.name).onChange(async (v) => {
         lang.name = v;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian2.Setting(wrap).setName("Dictionary folder").setDesc("Folder containing one .md file per word, with frontmatter `definition:` set.").addText(
+    new import_obsidian2.Setting(body).setName("Dictionary folder").setDesc("Folder of one .md file per word, each with frontmatter `definition:` set.").addText(
       (t) => t.setValue(lang.dictionaryFolder).onChange(async (v) => {
         lang.dictionaryFolder = v;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian2.Setting(wrap).setName("Enable hover tooltips").addToggle(
+    new import_obsidian2.Setting(body).setName("Active").setDesc("Include this language in hover, lookup, browsing, and highlighting.").addToggle(
+      (tg) => tg.setValue(isActive).onChange(async (v) => {
+        await this.toggleActive(lang.name, v);
+        this.display();
+      })
+    );
+    if (isActive && !isPrimary) {
+      new import_obsidian2.Setting(body).setName("Primary language").setDesc("Target for English-to-conlang translation and default save folder for new entries.").addButton(
+        (b) => b.setButtonText("Make primary").onClick(async () => {
+          this.plugin.settings.primaryLanguage = lang.name;
+          await this.plugin.saveSettings();
+          this.display();
+        })
+      );
+    }
+    new import_obsidian2.Setting(body).setName("Enable hover tooltips").setDesc("Show translation tooltips when hovering this language's words.").addToggle(
       (tg) => tg.setValue(lang.hoverEnabled).onChange(async (v) => {
         lang.hoverEnabled = v;
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian2.Setting(wrap).setName("Reload dictionary").setDesc("Re-scan the dictionary folder. Run this after adding new word entries.").addButton(
-      (b) => b.setButtonText("Reload").onClick(async () => {
-        if (lang.name === this.plugin.settings.activeLanguage) {
-          await this.plugin.reloadActiveLanguage();
-          new import_obsidian2.Notice(`Reloaded dictionary for ${lang.name}`);
-        } else {
-          new import_obsidian2.Notice(`Set ${lang.name} as active to reload its dictionary.`);
-        }
+    new import_obsidian2.Setting(body).addButton(
+      (b) => b.setButtonText("Reload dictionary").onClick(async () => {
+        const n = await this.plugin.reloadActiveLanguage();
+        this.plugin.refreshPanel();
+        this.plugin.refreshHighlights();
+        new import_obsidian2.Notice(
+          isActive ? `Reloaded \u2014 ${n} entries across active languages` : `${lang.name} is inactive; activate it to load its dictionary.`
+        );
+      })
+    ).addButton(
+      (b) => b.setButtonText("Remove language").setWarning().onClick(async () => {
+        this.removeLanguage(index, lang.name);
       })
     );
-    new import_obsidian2.Setting(wrap).setName("Remove language").addButton(
-      (b) => b.setButtonText("Remove").setWarning().onClick(async () => {
-        this.plugin.settings.languages.splice(index, 1);
-        await this.plugin.saveSettings();
-        this.display();
-      })
-    );
-    wrap.createEl("h4", { text: "Cypher sheets" });
-    wrap.createEl("p", {
+    const sheetsBody = this.collapsible(body, {
+      title: "Cypher sheets",
+      key: lang.name,
+      store: this.openSheets,
+      badge: String(lang.sheets.length)
+    });
+    sheetsBody.createEl("p", {
       cls: "conlang-help",
-      text: "Sheets run top to bottom. The output of each sheet is the input of the next. Rule types: word (no letter before or after), prefix (no letter before), suffix (no letter after), default (anywhere)."
+      text: "Sheets run top to bottom; each sheet's output feeds the next. Rule types: word (whole word), prefix, suffix, default (anywhere)."
     });
     for (let s = 0; s < lang.sheets.length; s++) {
-      this.renderSheet(wrap, lang, s);
+      this.renderSheet(sheetsBody, lang, s);
     }
-    new import_obsidian2.Setting(wrap).addButton(
+    new import_obsidian2.Setting(sheetsBody).addButton(
       (b) => b.setButtonText("Add sheet").setCta().onClick(async () => {
         lang.sheets.push({
           name: `Sheet ${lang.sheets.length + 1}`,
           enabled: true,
           rules: []
         });
+        this.openSheets.add(lang.name);
         await this.plugin.saveSettings();
         this.display();
       })
     );
-    wrap.createEl("h4", { text: "Inflection rules" });
-    wrap.createEl("p", {
+    if (!lang.inflections) lang.inflections = [];
+    const inflBody = this.collapsible(body, {
+      title: "Inflection rules",
+      key: lang.name,
+      store: this.openInflections,
+      badge: String(lang.inflections.length)
+    });
+    inflBody.createEl("p", {
       cls: "conlang-help",
-      text: "When a word isn't in the dictionary, these rules attempt to find its lemma. Strip removes characters from the end (suffix) or start (prefix); add then attaches characters to reconstruct the lemma. Most rules just chop a suffix off \u2014 leave add empty for that. Use add for respellings like English -ies \u2192 -y (strip 'ies', add 'y'). Optional POS filter: comma-separated, e.g. 'noun' or 'noun,proper-noun'. Rules without a POS apply to all words. Optional description shown as a hover tooltip in the panel (overrides built-in explanations for common labels). Rules are tried in order; the first whose reconstructed stem exists in the dictionary wins."
+      text: "When a word isn't in the dictionary, these rules try to find its lemma. Strip removes characters from the end (suffix) or start (prefix); add then attaches characters to reconstruct the lemma. Most rules just chop a suffix off \u2014 leave add empty for that. Use add for respellings (strip 'ies', add 'y'). Optional POS filter: comma-separated, e.g. 'noun' or 'noun,proper-noun'. Rules are tried in order; the first whose reconstructed stem exists wins."
     });
     let pendingPresetId = "";
-    new import_obsidian2.Setting(wrap).setName("Apply preset").setDesc(
-      "Load a curated starter set. Replaces any existing inflection rules for this language."
-    ).addDropdown((dd) => {
+    new import_obsidian2.Setting(inflBody).setName("Apply preset").setDesc("Load a curated starter set. Replaces existing inflection rules for this language.").addDropdown((dd) => {
       dd.addOption("", "\u2014 pick a preset \u2014");
       for (const preset of INFLECTION_PRESETS) {
         dd.addOption(preset.id, preset.name);
@@ -916,14 +1073,14 @@ var ConlangSettingTab = class extends import_obsidian2.PluginSettingTab {
         const confirmed = await this.confirmPreset(preset, existingCount);
         if (!confirmed) return;
         lang.inflections = preset.rules.map((r) => ({ ...r }));
+        this.openInflections.add(lang.name);
         await this.plugin.saveSettings();
         this.display();
         new import_obsidian2.Notice(`Made Up Words: applied preset "${preset.name}"`);
       })
     );
-    if (!lang.inflections) lang.inflections = [];
-    this.renderInflectionTable(wrap, lang);
-    new import_obsidian2.Setting(wrap).addButton(
+    this.renderInflectionTable(inflBody, lang);
+    new import_obsidian2.Setting(inflBody).addButton(
       (b) => b.setButtonText("Add inflection rule").onClick(async () => {
         var _a;
         ((_a = lang.inflections) != null ? _a : lang.inflections = []).push({
@@ -934,27 +1091,55 @@ var ConlangSettingTab = class extends import_obsidian2.PluginSettingTab {
           add: "",
           enabled: true
         });
+        this.openInflections.add(lang.name);
         await this.plugin.saveSettings();
         this.display();
       })
     );
   }
+  /** Remove a language and keep active/primary references valid. */
+  async removeLanguage(index, name) {
+    var _a, _b, _c;
+    this.plugin.settings.languages.splice(index, 1);
+    this.plugin.settings.activeLanguages = this.plugin.settings.activeLanguages.filter(
+      (n) => n !== name
+    );
+    if (this.plugin.settings.languages.length > 0 && this.plugin.settings.activeLanguages.length === 0) {
+      this.plugin.settings.activeLanguages = [this.plugin.settings.languages[0].name];
+    }
+    if (this.plugin.settings.primaryLanguage === name) {
+      this.plugin.settings.primaryLanguage = (_c = (_b = this.plugin.settings.activeLanguages[0]) != null ? _b : (_a = this.plugin.settings.languages[0]) == null ? void 0 : _a.name) != null ? _c : "";
+    }
+    this.openCards.delete(name);
+    this.openSheets.delete(name);
+    this.openInflections.delete(name);
+    await this.plugin.saveSettings();
+    await this.plugin.reloadActiveLanguage();
+    this.plugin.refreshPanel();
+    this.plugin.refreshHighlights();
+    this.display();
+  }
   /**
    * Show a small modal confirming a preset replacement.
-   * Returns true if the user confirmed, false if they cancelled.
-   * If there are no existing rules, we don't bother prompting.
+   * Returns true if confirmed. Skips the prompt when there are no existing rules.
    */
   async confirmPreset(preset, existingCount) {
     if (existingCount === 0) return true;
     return new Promise((resolve) => {
-      const modal = new PresetConfirmModal(this.app, preset.name, preset.description, existingCount, resolve);
+      const modal = new PresetConfirmModal(
+        this.app,
+        preset.name,
+        preset.description,
+        existingCount,
+        resolve
+      );
       modal.open();
     });
   }
   renderSheet(parent, lang, sheetIndex) {
     const sheet = lang.sheets[sheetIndex];
     const box = parent.createDiv({ cls: "conlang-sheet" });
-    const header = new import_obsidian2.Setting(box).setName(sheet.name).addToggle(
+    new import_obsidian2.Setting(box).setName(sheet.name).addToggle(
       (t) => t.setTooltip("Enable sheet").setValue(sheet.enabled).onChange(async (v) => {
         sheet.enabled = v;
         await this.plugin.saveSettings();
@@ -975,21 +1160,14 @@ var ConlangSettingTab = class extends import_obsidian2.PluginSettingTab {
     const tableWrap = box.createDiv({ cls: "conlang-rules-wrap" });
     const table = tableWrap.createEl("table", { cls: "conlang-rules-table" });
     const thead = table.createEl("thead").createEl("tr");
-    ["Input", "Output", "Type", "On", ""].forEach(
-      (h) => thead.createEl("th", { text: h })
-    );
+    ["Input", "Output", "Type", "On", ""].forEach((h) => thead.createEl("th", { text: h }));
     const tbody = table.createEl("tbody");
     for (let r = 0; r < sheet.rules.length; r++) {
       this.renderRuleRow(tbody, sheet, r);
     }
     new import_obsidian2.Setting(box).addButton(
       (b) => b.setButtonText("Add rule").onClick(async () => {
-        sheet.rules.push({
-          input: "",
-          output: "",
-          type: "default",
-          enabled: true
-        });
+        sheet.rules.push({ input: "", output: "", type: "default", enabled: true });
         await this.plugin.saveSettings();
         this.display();
       })
@@ -3056,8 +3234,161 @@ var WordCreationModal = class extends import_obsidian7.Modal {
   }
 };
 
+// highlight.ts
+var import_view = require("@codemirror/view");
+var import_state = require("@codemirror/state");
+var import_language = require("@codemirror/language");
+
+// highlight-core.ts
+var BASE_CLASS = "conlang-known-word";
+function classForKind(kind) {
+  switch (kind) {
+    case "english":
+      return `${BASE_CLASS} is-english`;
+    case "phrase":
+      return `${BASE_CLASS} is-conlang is-phrase`;
+    case "conlang":
+    default:
+      return `${BASE_CLASS} is-conlang`;
+  }
+}
+function classifyWord(plugin, cleaned) {
+  if (!cleaned) return null;
+  const s = plugin.settings;
+  if (s.highlightConlang) {
+    if (plugin.dictionary.lookupAll(cleaned).length > 0) return "conlang";
+    for (const lang of plugin.getActiveLanguages()) {
+      if (findInflection(cleaned, plugin.dictionary, lang.inflections)) {
+        return "conlang";
+      }
+    }
+  }
+  if (s.highlightEnglish) {
+    if (plugin.dictionary.lookupEnglish(cleaned).length > 0) return "english";
+  }
+  return null;
+}
+function highlightSpans(plugin, text, baseOffset) {
+  const out = [];
+  if (!plugin.settings.highlightKnownWords) return out;
+  const phrases = plugin.settings.highlightConlang ? plugin.dictionary.allPhrases() : [];
+  const tokens = tokeniseWithPhrases(text, phrases);
+  let offset = baseOffset;
+  for (const token of tokens) {
+    const len = token.text.length;
+    if (token.kind === "phrase" && token.entry) {
+      out.push({ from: offset, to: offset + len, kind: "phrase" });
+    } else if (token.kind === "word") {
+      const kind = classifyWord(plugin, cleanWord(token.text));
+      if (kind) out.push({ from: offset, to: offset + len, kind });
+    }
+    offset += len;
+  }
+  return out;
+}
+
+// highlight.ts
+var refreshHighlightEffect = import_state.StateEffect.define();
+function isExcludedPos(view, pos) {
+  let node = (0, import_language.syntaxTree)(view.state).resolveInner(pos, 1);
+  while (node) {
+    const name = node.type.name || "";
+    if (/code|frontmatter|math|html|comment/i.test(name)) return true;
+    node = node.parent;
+  }
+  return false;
+}
+function makeHighlightExtension(plugin) {
+  return import_view.ViewPlugin.fromClass(
+    class {
+      constructor(view) {
+        this.decorations = this.build(view);
+      }
+      update(update) {
+        const forced = update.transactions.some(
+          (tr) => tr.effects.some((e) => e.is(refreshHighlightEffect))
+        );
+        if (update.docChanged || update.viewportChanged || forced) {
+          this.decorations = this.build(update.view);
+        }
+      }
+      build(view) {
+        const builder = new import_state.RangeSetBuilder();
+        if (!plugin.settings.highlightKnownWords) return builder.finish();
+        const seenLines = /* @__PURE__ */ new Set();
+        for (const range of view.visibleRanges) {
+          let pos = range.from;
+          while (pos <= range.to) {
+            const line = view.state.doc.lineAt(pos);
+            if (!seenLines.has(line.from)) {
+              seenLines.add(line.from);
+              for (const span of highlightSpans(plugin, line.text, line.from)) {
+                if (isExcludedPos(view, span.from)) continue;
+                builder.add(
+                  span.from,
+                  span.to,
+                  import_view.Decoration.mark({ class: classForKind(span.kind) })
+                );
+              }
+            }
+            pos = line.to + 1;
+          }
+        }
+        return builder.finish();
+      }
+    },
+    {
+      decorations: (v) => v.decorations
+    }
+  );
+}
+function highlightElement(plugin, root) {
+  if (!plugin.settings.highlightKnownWords) return;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      const parent = node.parentElement;
+      if (!parent) return NodeFilter.FILTER_REJECT;
+      if (parent.closest(
+        "code, pre, .math, .frontmatter, .cm-editor, ." + BASE_CLASS + ", a.tag"
+      )) {
+        return NodeFilter.FILTER_REJECT;
+      }
+      if (!node.textContent || !node.textContent.trim()) {
+        return NodeFilter.FILTER_REJECT;
+      }
+      return NodeFilter.FILTER_ACCEPT;
+    }
+  });
+  const targets = [];
+  let n;
+  while (n = walker.nextNode()) targets.push(n);
+  for (const textNode of targets) replaceTextNode(plugin, textNode);
+}
+function replaceTextNode(plugin, textNode) {
+  var _a, _b;
+  const text = (_a = textNode.textContent) != null ? _a : "";
+  const spans = highlightSpans(plugin, text, 0);
+  if (spans.length === 0) return;
+  const frag = document.createDocumentFragment();
+  let cursor = 0;
+  for (const span of spans) {
+    if (span.from > cursor) {
+      frag.appendChild(document.createTextNode(text.slice(cursor, span.from)));
+    }
+    const el = document.createElement("span");
+    el.className = classForKind(span.kind);
+    el.textContent = text.slice(span.from, span.to);
+    frag.appendChild(el);
+    cursor = span.to;
+  }
+  if (cursor < text.length) {
+    frag.appendChild(document.createTextNode(text.slice(cursor)));
+  }
+  (_b = textNode.parentNode) == null ? void 0 : _b.replaceChild(frag, textNode);
+}
+
 // main.ts
-var ConlangPlugin = class extends import_obsidian8.Plugin {
+var _ConlangPlugin = class _ConlangPlugin extends import_obsidian8.Plugin {
   constructor() {
     super(...arguments);
     this.settings = DEFAULT_SETTINGS;
@@ -3065,22 +3396,38 @@ var ConlangPlugin = class extends import_obsidian8.Plugin {
     this.tooltipEl = null;
     this.tooltipHideTimer = null;
     this.lastHoverWord = null;
+    this.hoverLastRun = 0;
+    this.hoverPendingTimer = null;
+    this.lastMouseEvent = null;
+    // Cached "does any active language want hover tooltips" — recomputed on
+    // settings change so the mousemove fast-path is a single boolean check.
+    this.hoverActive = false;
   }
   async onload() {
     await this.loadSettings();
     this.dictionary = new Dictionary(this.app);
     this.app.workspace.onLayoutReady(async () => {
       await this.reloadActiveLanguage();
+      this.updateHoverActive();
       this.refreshPanel();
+      this.refreshHighlights();
       this.maybeShowWelcome();
     });
+    this.registerEditorExtension(makeHighlightExtension(this));
+    this.registerMarkdownPostProcessor((el) => highlightElement(this, el));
+    this.applyHighlightStyleClass();
     this.registerEvent(
       this.app.metadataCache.on("changed", (file) => {
-        const lang = this.getActiveLanguage();
-        if (!lang) return;
-        if (file.path.startsWith(lang.dictionaryFolder)) {
-          this.reloadActiveLanguage().then(() => this.refreshPanel());
-        }
+        this.maybeReloadForPath(file.path);
+      })
+    );
+    this.registerEvent(
+      this.app.vault.on("delete", (file) => this.maybeReloadForPath(file.path))
+    );
+    this.registerEvent(
+      this.app.vault.on("rename", (file, oldPath) => {
+        this.maybeReloadForPath(file.path);
+        this.maybeReloadForPath(oldPath);
       })
     );
     this.addSettingTab(new ConlangSettingTab(this.app, this));
@@ -3119,6 +3466,7 @@ var ConlangPlugin = class extends import_obsidian8.Plugin {
       callback: async () => {
         const n = await this.reloadActiveLanguage();
         this.refreshPanel();
+        this.refreshHighlights();
         new import_obsidian8.Notice(`Made Up Words: loaded ${n} dictionary entries`);
       }
     });
@@ -3137,15 +3485,35 @@ var ConlangPlugin = class extends import_obsidian8.Plugin {
       name: "Look up word (all senses)",
       editorCallback: (editor) => this.lookupWord(editor)
     });
+    this.addCommand({
+      id: "toggle-highlighting",
+      name: "Toggle known-word highlighting",
+      callback: async () => {
+        this.settings.highlightKnownWords = !this.settings.highlightKnownWords;
+        await this.saveSettings();
+        new import_obsidian8.Notice(
+          `Made Up Words: highlighting ${this.settings.highlightKnownWords ? "on" : "off"}`
+        );
+      }
+    });
     this.registerDomEvent(document, "mousemove", (evt) => {
-      this.handleHover(evt);
+      this.onMouseMove(evt);
     });
   }
   onunload() {
     this.hideTooltip();
+    if (this.hoverPendingTimer !== null) {
+      window.clearTimeout(this.hoverPendingTimer);
+      this.hoverPendingTimer = null;
+    }
     if (this.tooltipEl && this.tooltipEl.parentElement) {
       this.tooltipEl.parentElement.removeChild(this.tooltipEl);
     }
+    document.body.removeClass(
+      "conlang-hl-underline",
+      "conlang-hl-italic",
+      "conlang-hl-background"
+    );
   }
   async loadSettings() {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
@@ -3178,7 +3546,9 @@ var ConlangPlugin = class extends import_obsidian8.Plugin {
   }
   async saveSettings() {
     await this.saveData(this.settings);
+    this.updateHoverActive();
     this.refreshPanel();
+    this.refreshHighlights();
   }
   /**
    * Show a one-time welcome notice if this is the user's first time loading
@@ -3258,6 +3628,73 @@ var ConlangPlugin = class extends import_obsidian8.Plugin {
       const view = leaf.view;
       if (view instanceof TranslationPanelView) {
         view.refresh();
+      }
+    }
+  }
+  /**
+   * Set the body-level class that drives the highlight appearance. CSS keys
+   * off "conlang-hl-<style>" so the underline/italic/background variants are
+   * pure styling with no inline styles. Cleared entirely when highlighting
+   * is off so no stray rules apply.
+   */
+  applyHighlightStyleClass() {
+    document.body.removeClass(
+      "conlang-hl-underline",
+      "conlang-hl-italic",
+      "conlang-hl-background"
+    );
+    if (this.settings.highlightKnownWords) {
+      document.body.addClass(`conlang-hl-${this.settings.highlightStyle}`);
+    }
+  }
+  /**
+   * Recompute highlighting everywhere after the dictionary or settings
+   * change. Editors are nudged with a refresh effect so the CM6 ViewPlugin
+   * rebuilds its decorations; Reading views are re-rendered so the
+   * post-processor runs again.
+   */
+  /**
+   * If `path` falls inside ANY active language's dictionary folder, reload the
+   * dictionary and refresh the panel + highlights. Used by the metadata and
+   * vault watchers so added/edited/deleted/renamed entries take effect live.
+   *
+   * Previously this only watched the *primary* language's folder, so words kept
+   * in another active language's folder never triggered a live refresh.
+   */
+  maybeReloadForPath(path) {
+    const inDict = this.getActiveLanguages().some(
+      (l) => l.dictionaryFolder && path.startsWith(l.dictionaryFolder)
+    );
+    if (!inDict) return;
+    this.reloadActiveLanguage().then(() => {
+      this.refreshPanel();
+      this.refreshHighlights();
+    });
+  }
+  refreshHighlights() {
+    var _a;
+    this.applyHighlightStyleClass();
+    try {
+      this.app.workspace.updateOptions();
+    } catch (e) {
+      console.error("[Made Up Words] updateOptions failed:", e);
+    }
+    for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
+      const view = leaf.view;
+      if (!(view instanceof import_obsidian8.MarkdownView)) continue;
+      const cm = (_a = view.editor) == null ? void 0 : _a.cm;
+      if (cm) {
+        try {
+          cm.dispatch({ effects: refreshHighlightEffect.of(null) });
+        } catch (e) {
+        }
+      }
+      const preview = view.previewMode;
+      if (preview && typeof preview.rerender === "function") {
+        try {
+          preview.rerender(true);
+        } catch (e) {
+        }
       }
     }
   }
@@ -3537,6 +3974,7 @@ var ConlangPlugin = class extends import_obsidian8.Plugin {
     await this.waitForFrontmatter(file);
     await this.reloadActiveLanguage();
     this.refreshPanel();
+    this.refreshHighlights();
     this.lastHoverWord = null;
     new import_obsidian8.Notice(`Conlang: created entry "${translated}"`);
   }
@@ -3588,6 +4026,7 @@ var ConlangPlugin = class extends import_obsidian8.Plugin {
     await this.waitForFrontmatter(file);
     await this.reloadActiveLanguage();
     this.refreshPanel();
+    this.refreshHighlights();
     this.lastHoverWord = null;
     new import_obsidian8.Notice(`Conlang: added "${result.conlangWord}"`);
   }
@@ -3637,6 +4076,7 @@ var ConlangPlugin = class extends import_obsidian8.Plugin {
     await this.waitForFrontmatter(file);
     await this.reloadActiveLanguage();
     this.refreshPanel();
+    this.refreshHighlights();
     this.lastHoverWord = null;
     new import_obsidian8.Notice(`Conlang: created name "${result.conlangForm}"`);
   }
@@ -3691,10 +4131,38 @@ var ConlangPlugin = class extends import_obsidian8.Plugin {
   // === Hover tooltips ===
   // Tooltip shows dictionary definitions when available, falls back to
   // a cypher preview so every word gives feedback.
+  /**
+   * Recompute whether any active language wants hover tooltips. Called on load
+   * and whenever settings change, so the mousemove handler can bail out with a
+   * single boolean check instead of scanning languages on every event.
+   */
+  updateHoverActive() {
+    this.hoverActive = this.getActiveLanguages().some((l) => l.hoverEnabled);
+  }
+  /**
+   * Throttled entry point for mousemove. Resolving the word under the cursor
+   * uses caretRangeFromPoint, which forces a layout flush, so we cap how often
+   * handleHover runs. A leading call keeps the tooltip responsive; a single
+   * trailing timer guarantees the cursor's final resting position resolves.
+   */
+  onMouseMove(evt) {
+    if (!this.hoverActive) return;
+    this.lastMouseEvent = evt;
+    const now = Date.now();
+    const since = now - this.hoverLastRun;
+    if (since >= _ConlangPlugin.HOVER_THROTTLE_MS) {
+      this.hoverLastRun = now;
+      this.handleHover(evt);
+    } else if (this.hoverPendingTimer === null) {
+      this.hoverPendingTimer = window.setTimeout(() => {
+        this.hoverPendingTimer = null;
+        this.hoverLastRun = Date.now();
+        if (this.lastMouseEvent) this.handleHover(this.lastMouseEvent);
+      }, _ConlangPlugin.HOVER_THROTTLE_MS - since);
+    }
+  }
   handleHover(evt) {
-    const activeLangs = this.getActiveLanguages();
-    const anyHoverEnabled = activeLangs.some((l) => l.hoverEnabled);
-    if (!anyHoverEnabled) {
+    if (!this.hoverActive) {
       this.hideTooltip();
       return;
     }
@@ -3976,6 +4444,12 @@ var ConlangPlugin = class extends import_obsidian8.Plugin {
     }
   }
 };
+// Hover throttling: mousemove fires very frequently, and resolving the word
+// under the cursor calls caretRangeFromPoint (a layout query). We cap this
+// to one resolve per HOVER_THROTTLE_MS, with a trailing call so the cursor's
+// final resting position is always resolved.
+_ConlangPlugin.HOVER_THROTTLE_MS = 50;
+var ConlangPlugin = _ConlangPlugin;
 function escapeHtml2(s) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
 }

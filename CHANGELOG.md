@@ -6,6 +6,51 @@ This project is pre-1.0. Expect rough edges and occasional breaking changes to
 settings or data formats. Where a change affects existing data, migration is
 handled automatically on load.
 
+## [0.16.0] — Highlight known words
+
+### Added
+- **Known-word highlighting.** Words and phrases the plugin recognises are now
+  visually marked directly in your notes, in both the editor (Live Preview /
+  Source) and Reading view. Two directions are supported:
+  - **Conlang words** — anything that exists as a dictionary entry in an active
+    language, including inflected forms and multi-word phrases.
+  - **Translatable English words** — English terms the dictionary can translate
+    (e.g. "cat" is marked when you have a word meaning cat).
+- **Three highlight styles** in Settings → Made Up Words → Highlighting: a
+  subtle dotted underline + accent colour (default), italics, or a faint
+  background. Each direction (conlang / English) can be toggled independently,
+  and the whole feature has a master on/off switch.
+- Highlight appearance is driven entirely by CSS classes
+  (`.conlang-known-word.is-conlang` / `.is-english` / `.is-phrase`), so themes
+  and CSS snippets can fully restyle it. Colours are exposed as the
+  `--conlang-known-color` / `--conlang-known-english-color` /
+  `--conlang-known-bg` custom properties.
+- **Command: "Toggle known-word highlighting"** — turn highlighting on or off
+  from the command palette (handy on slower machines, or for a quick
+  distraction-free read).
+
+### Changed
+- **Settings tab redesigned.** Global options are grouped into clear sections
+  (Languages, Hover tooltips, Highlighting, Translation), and each language is
+  now a collapsible card with its cypher sheets and inflection rules as nested
+  collapsibles, so the page stays manageable with many languages. A top
+  overview lists every language with quick Active checkboxes and a Primary
+  star, and active cards show a live entry count. Fixed the per-language
+  "Reload dictionary" button (it previously checked a legacy field and rarely
+  fired) and made language removal keep the active/primary selection valid.
+- **Hover tooltips are now throttled.** Resolving the word under the cursor
+  uses `caretRangeFromPoint`, which forces a layout flush; previously this ran
+  on every `mousemove`. It now runs at most once per 50&nbsp;ms (with a trailing
+  call so the cursor's final position still resolves), and the handler bails out
+  with a single cached boolean when no active language has hover enabled. This
+  noticeably reduces CPU use while moving the mouse, especially with always-on
+  hover.
+
+### Notes
+- The editor decorator only scans the visible viewport and skips code blocks,
+  inline code, frontmatter, math, and HTML for performance and correctness.
+- Highlighting refreshes automatically when the dictionary or settings change.
+
 ## [0.15.1] — Plugin review fixes
 
 A small patch release addressing the Obsidian community plugin automated

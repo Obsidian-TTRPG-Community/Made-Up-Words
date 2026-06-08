@@ -1,4 +1,11 @@
-// Settings tab: manage languages, dictionary folders, and cypher sheets.
+// Settings tab: manage languages, dictionary folders, cypher sheets, and
+// inflection rules, plus global hover / highlighting / translation behaviour.
+//
+// Layout (v0.16): global behaviour is grouped into labelled sections, and each
+// language is a collapsible card (with its cypher sheets and inflection rules
+// as nested collapsibles) so the page stays manageable with many languages.
+// Expand/collapse state is preserved across the full-tab re-renders that most
+// edits trigger.
 
 import { App, PluginSettingTab, Setting, Notice, Modal } from "obsidian";
 import type ConlangPlugin from "./main";
@@ -8,6 +15,11 @@ import { INFLECTION_PRESETS, findPreset } from "./presets";
 export class ConlangSettingTab extends PluginSettingTab {
   plugin: ConlangPlugin;
 
+  // Persist expand/collapse state across re-renders, keyed by language name.
+  private openCards = new Set<string>();
+  private openSheets = new Set<string>();
+  private openInflections = new Set<string>();
+
   constructor(app: App, plugin: ConlangPlugin) {
     super(app, plugin);
     this.plugin = plugin;
@@ -16,70 +28,233 @@ export class ConlangSettingTab extends PluginSettingTab {
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
+    containerEl.addClass("conlang-settings");
     containerEl.createEl("h2", { text: "Made Up Words" });
 
-    // Active language selector
-    // Multi-active language selector: which languages contribute to hover,
-    // lookup, and dictionary queries. Primary language is the target for
-    // English→conlang translation and the default save target.
+    this.renderLanguageOverview(containerEl);
+    this.renderHoverSection(containerEl);
+    this.renderHighlightSection(containerEl);
+    this.renderTranslationSection(containerEl);
+
+    containerEl.createEl("h3", { text: "Per-language settings" });
+    containerEl.createEl("p", {
+      cls: "conlang-help",
+      text:
+        "Each language is a card below. Expand one to edit its dictionary " +
+        "folder, cypher sheets, and inflection rules.",
+    });
+    for (let i = 0; i < this.plugin.settings.languages.length; i++) {
+      this.renderLanguageCard(containerEl, this.plugin.settings.languages[i], i);
+    }
+  }
+
+  // ===== Top overview =====
+
+  private renderLanguageOverview(containerEl: HTMLElement): void {
+    containerEl.createEl("h3", { text: "Languages" });
     new Setting(containerEl)
       .setName("Active languages")
       .setDesc(
-        "Choose which languages are 'live': hover, lookup, and dictionary " +
-          "browsing include all active languages. Toggle each one on or off."
+        "Active languages contribute to hover, lookup, dictionary browsing, " +
+          "and highlighting. Tick to activate; click the star to set the primary."
       );
-    const activeListEl = containerEl.createDiv({ cls: "conlang-active-list" });
+
+    const list = containerEl.createDiv({ cls: "conlang-lang-overview" });
     for (const lang of this.plugin.settings.languages) {
-      const row = activeListEl.createDiv({ cls: "conlang-active-row" });
+      const isActive = this.plugin.settings.activeLanguages.includes(lang.name);
+      const isPrimary = this.plugin.settings.primaryLanguage === lang.name;
+      const row = list.createDiv({ cls: "conlang-lang-overview-row" });
+
       const cb = row.createEl("input", { type: "checkbox" });
-      cb.checked = this.plugin.settings.activeLanguages.includes(lang.name);
+      cb.checked = isActive;
       cb.addEventListener("change", async () => {
-        const set = new Set(this.plugin.settings.activeLanguages);
-        if (cb.checked) set.add(lang.name);
-        else set.delete(lang.name);
-        this.plugin.settings.activeLanguages = Array.from(set);
-        // Ensure primary stays valid: if we just disabled the primary, fall back.
-        if (
-          !this.plugin.settings.activeLanguages.includes(
-            this.plugin.settings.primaryLanguage
-          )
-        ) {
-          this.plugin.settings.primaryLanguage =
-            this.plugin.settings.activeLanguages[0] ?? "";
-        }
-        // Empty active list isn't allowed; re-add this language if so.
-        if (this.plugin.settings.activeLanguages.length === 0) {
-          this.plugin.settings.activeLanguages = [lang.name];
-          this.plugin.settings.primaryLanguage = lang.name;
-          cb.checked = true;
-          new Notice("Made Up Words: at least one language must be active.");
-        }
-        await this.plugin.saveSettings();
-        await this.plugin.reloadActiveLanguage();
+        await this.toggleActive(lang.name, cb.checked);
         this.display();
       });
-      const label = row.createEl("label", { text: lang.name });
-      label.addEventListener("click", () => cb.click());
+
+      const star = row.createSpan({
+        cls: "conlang-lang-overview-star" + (isPrimary ? " is-primary" : ""),
+        text: isPrimary ? "★" : "☆",
+      });
+      star.setAttribute("aria-label", "Set as primary language");
+      star.addEventListener("click", async () => {
+        if (!this.plugin.settings.activeLanguages.includes(lang.name)) {
+          await this.toggleActive(lang.name, true);
+        }
+        this.plugin.settings.primaryLanguage = lang.name;
+        await this.plugin.saveSettings();
+        this.display();
+      });
+
+      const name = row.createSpan({ cls: "conlang-lang-overview-name", text: lang.name });
+      name.addEventListener("click", () => cb.click());
+
+      if (isPrimary) {
+        row.createSpan({ cls: "conlang-badge conlang-badge-primary", text: "primary" });
+      } else if (isActive) {
+        row.createSpan({ cls: "conlang-badge conlang-badge-active", text: "active" });
+      } else {
+        row.createSpan({ cls: "conlang-badge", text: "inactive" });
+      }
     }
 
     new Setting(containerEl)
-      .setName("Primary language")
+      .addButton((btn) =>
+        btn
+          .setButtonText("Add language")
+          .setCta()
+          .onClick(async () => {
+            const newName = this.uniqueLanguageName();
+            this.plugin.settings.languages.push({
+              name: newName,
+              dictionaryFolder: `Made Up Words/${newName}`,
+              hoverEnabled: true,
+              sheets: [],
+            });
+            this.openCards.add(newName);
+            await this.plugin.saveSettings();
+            this.display();
+          })
+      )
+      .addButton((btn) =>
+        btn.setButtonText("Reload dictionaries").onClick(async () => {
+          const n = await this.plugin.reloadActiveLanguage();
+          this.plugin.refreshPanel();
+          this.plugin.refreshHighlights();
+          new Notice(`Made Up Words: loaded ${n} dictionary entries`);
+        })
+      );
+  }
+
+  private uniqueLanguageName(): string {
+    const names = new Set(this.plugin.settings.languages.map((l) => l.name));
+    let i = this.plugin.settings.languages.length + 1;
+    let name = `Language ${i}`;
+    while (names.has(name)) name = `Language ${++i}`;
+    return name;
+  }
+
+  /** Toggle a language's active state, keeping primary valid and reloading. */
+  private async toggleActive(name: string, active: boolean): Promise<void> {
+    const set = new Set(this.plugin.settings.activeLanguages);
+    if (active) set.add(name);
+    else set.delete(name);
+    let listed = Array.from(set);
+    if (listed.length === 0) {
+      listed = [name];
+      new Notice("Made Up Words: at least one language must stay active.");
+    }
+    this.plugin.settings.activeLanguages = listed;
+    if (!listed.includes(this.plugin.settings.primaryLanguage)) {
+      this.plugin.settings.primaryLanguage = listed[0];
+    }
+    await this.plugin.saveSettings();
+    await this.plugin.reloadActiveLanguage();
+    this.plugin.refreshPanel();
+    this.plugin.refreshHighlights();
+  }
+
+  // ===== Behaviour sections =====
+
+  private renderHoverSection(containerEl: HTMLElement): void {
+    containerEl.createEl("h3", { text: "Hover tooltips" });
+    new Setting(containerEl)
+      .setName("Hover modifier key")
       .setDesc(
-        "Used as the target for English→conlang translation and as the default " +
-          "save folder for new entries. Must be one of the active languages."
+        "Hold this key while hovering to see translation tooltips. " +
+          "'None' shows a tooltip on any hover. Hover can also be turned off " +
+          "per language in each card below."
       )
       .addDropdown((dd) => {
-        const active = this.plugin.settings.activeLanguages;
-        for (const name of active) {
-          dd.addOption(name, name);
-        }
-        dd.setValue(this.plugin.settings.primaryLanguage);
+        dd.addOption("none", "None (always show)");
+        dd.addOption("shift", "Shift");
+        dd.addOption("alt", "Alt / Option");
+        dd.addOption("ctrl", "Ctrl / Cmd");
+        dd.setValue(this.plugin.settings.hoverModifier);
         dd.onChange(async (value) => {
-          this.plugin.settings.primaryLanguage = value;
+          this.plugin.settings.hoverModifier = value as any;
           await this.plugin.saveSettings();
         });
       });
 
+    new Setting(containerEl)
+      .setName("Fallback for unknown words")
+      .setDesc(
+        "What to show when you hover a word that isn't in the dictionary. " +
+          "'Cypher preview' shows a phonological placeholder; 'Nothing' shows no tooltip."
+      )
+      .addDropdown((dd) => {
+        dd.addOption("cypher", "Cypher preview");
+        dd.addOption("nothing", "Nothing");
+        dd.setValue(this.plugin.settings.hoverFallback);
+        dd.onChange(async (value) => {
+          this.plugin.settings.hoverFallback = value as any;
+          await this.plugin.saveSettings();
+        });
+      });
+  }
+
+  private renderHighlightSection(containerEl: HTMLElement): void {
+    containerEl.createEl("h3", { text: "Highlighting" });
+    new Setting(containerEl)
+      .setName("Highlight known words in notes")
+      .setDesc(
+        "Visually mark recognised words in both the editor and Reading view."
+      )
+      .addToggle((tg) =>
+        tg.setValue(this.plugin.settings.highlightKnownWords).onChange(async (v) => {
+          this.plugin.settings.highlightKnownWords = v;
+          await this.plugin.saveSettings();
+          this.display();
+        })
+      );
+
+    if (!this.plugin.settings.highlightKnownWords) return;
+
+    new Setting(containerEl)
+      .setName("Highlight style")
+      .setDesc(
+        "How highlighted words look. Themeable via the .conlang-known-word CSS class."
+      )
+      .addDropdown((dd) => {
+        dd.addOption("underline", "Dotted underline + colour");
+        dd.addOption("italic", "Italics");
+        dd.addOption("background", "Background highlight");
+        dd.setValue(this.plugin.settings.highlightStyle);
+        dd.onChange(async (value) => {
+          this.plugin.settings.highlightStyle = value as any;
+          await this.plugin.saveSettings();
+        });
+      });
+
+    new Setting(containerEl)
+      .setName("Highlight conlang words")
+      .setDesc(
+        "Mark words that exist as dictionary entries (including inflected forms and phrases)."
+      )
+      .addToggle((tg) =>
+        tg.setValue(this.plugin.settings.highlightConlang).onChange(async (v) => {
+          this.plugin.settings.highlightConlang = v;
+          await this.plugin.saveSettings();
+        })
+      );
+
+    new Setting(containerEl)
+      .setName("Highlight translatable English words")
+      .setDesc(
+        "Mark English words the dictionary can translate. Handy for spotting " +
+          "coverage, but noisier in English-heavy notes."
+      )
+      .addToggle((tg) =>
+        tg.setValue(this.plugin.settings.highlightEnglish).onChange(async (v) => {
+          this.plugin.settings.highlightEnglish = v;
+          await this.plugin.saveSettings();
+        })
+      );
+  }
+
+  private renderTranslationSection(containerEl: HTMLElement): void {
+    containerEl.createEl("h3", { text: "Translation" });
     new Setting(containerEl)
       .setName("Commit wrapper")
       .setDesc(
@@ -95,88 +270,72 @@ export class ConlangSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         });
       });
-
-    // Hover behaviour. Default "shift" keeps the tooltip out of the way
-    // unless explicitly requested — testers found always-on intrusive.
-    new Setting(containerEl)
-      .setName("Hover modifier key")
-      .setDesc(
-        "Hold this key while hovering to see translation tooltips. " +
-          "Use 'None' to show tooltips on any hover (the old behaviour)."
-      )
-      .addDropdown((dd) => {
-        dd.addOption("none", "None (always show)");
-        dd.addOption("shift", "Shift");
-        dd.addOption("alt", "Alt / Option");
-        dd.addOption("ctrl", "Ctrl / Cmd");
-        dd.setValue(this.plugin.settings.hoverModifier);
-        dd.onChange(async (value) => {
-          this.plugin.settings.hoverModifier = value as any;
-          await this.plugin.saveSettings();
-        });
-      });
-
-    new Setting(containerEl)
-      .setName("Hover fallback for unknown words")
-      .setDesc(
-        "What to show when you hover a word that isn't in the dictionary. " +
-          "'Cypher preview' shows a phonological placeholder; 'Nothing' shows no tooltip at all."
-      )
-      .addDropdown((dd) => {
-        dd.addOption("cypher", "Cypher preview");
-        dd.addOption("nothing", "Nothing");
-        dd.setValue(this.plugin.settings.hoverFallback);
-        dd.onChange(async (value) => {
-          this.plugin.settings.hoverFallback = value as any;
-          await this.plugin.saveSettings();
-        });
-      });
-
-    new Setting(containerEl)
-      .setName("Add new language")
-      .addButton((btn) =>
-        btn
-          .setButtonText("Add language")
-          .setCta()
-          .onClick(async () => {
-            const newName = `Language ${this.plugin.settings.languages.length + 1}`;
-            this.plugin.settings.languages.push({
-              name: newName,
-              dictionaryFolder: `Made Up Words/${newName}`,
-              hoverEnabled: true,
-              sheets: [],
-            });
-            await this.plugin.saveSettings();
-            this.display();
-          })
-      );
-
-    // Per-language panels
-    for (let i = 0; i < this.plugin.settings.languages.length; i++) {
-      this.renderLanguage(containerEl, this.plugin.settings.languages[i], i);
-    }
   }
 
-  private renderLanguage(
+  // ===== Collapsible helper =====
+
+  private collapsible(
     parent: HTMLElement,
-    lang: LanguageConfig,
-    index: number
-  ): void {
-    const wrap = parent.createDiv({ cls: "conlang-language-panel" });
-    wrap.createEl("h3", { text: lang.name });
+    opts: { title: string; key: string; store: Set<string>; badge?: string }
+  ): HTMLElement {
+    const details = parent.createEl("details", { cls: "conlang-subcollapse" });
+    if (opts.store.has(opts.key)) details.open = true;
+    details.addEventListener("toggle", () => {
+      if (details.open) opts.store.add(opts.key);
+      else opts.store.delete(opts.key);
+    });
+    const summary = details.createEl("summary", { cls: "conlang-subcollapse-summary" });
+    summary.createSpan({ cls: "conlang-subcollapse-title", text: opts.title });
+    if (opts.badge != null) {
+      summary.createSpan({ cls: "conlang-badge", text: opts.badge });
+    }
+    return details.createDiv({ cls: "conlang-subcollapse-body" });
+  }
 
-    new Setting(wrap)
-      .setName("Name")
-      .addText((t) =>
-        t.setValue(lang.name).onChange(async (v) => {
-          lang.name = v;
-          await this.plugin.saveSettings();
-        })
-      );
+  // ===== Per-language card =====
 
-    new Setting(wrap)
+  private renderLanguageCard(parent: HTMLElement, lang: LanguageConfig, index: number): void {
+    const isActive = this.plugin.settings.activeLanguages.includes(lang.name);
+    const isPrimary = this.plugin.settings.primaryLanguage === lang.name;
+
+    const card = parent.createEl("details", { cls: "conlang-card" });
+    if (this.openCards.has(lang.name)) card.open = true;
+    card.addEventListener("toggle", () => {
+      if (card.open) this.openCards.add(lang.name);
+      else this.openCards.delete(lang.name);
+    });
+
+    const summary = card.createEl("summary", { cls: "conlang-card-summary" });
+    summary.createSpan({ cls: "conlang-card-title", text: lang.name });
+    if (isPrimary) {
+      summary.createSpan({ cls: "conlang-badge conlang-badge-primary", text: "primary" });
+    } else if (isActive) {
+      summary.createSpan({ cls: "conlang-badge conlang-badge-active", text: "active" });
+    } else {
+      summary.createSpan({ cls: "conlang-badge", text: "inactive" });
+    }
+    if (isActive) {
+      const count = this.plugin.dictionary
+        .allEntries()
+        .filter((e) => e.language === lang.name).length;
+      summary.createSpan({
+        cls: "conlang-card-count",
+        text: `${count} ${count === 1 ? "entry" : "entries"}`,
+      });
+    }
+
+    const body = card.createDiv({ cls: "conlang-card-body" });
+
+    new Setting(body).setName("Name").addText((t) =>
+      t.setValue(lang.name).onChange(async (v) => {
+        lang.name = v;
+        await this.plugin.saveSettings();
+      })
+    );
+
+    new Setting(body)
       .setName("Dictionary folder")
-      .setDesc("Folder containing one .md file per word, with frontmatter `definition:` set.")
+      .setDesc("Folder of one .md file per word, each with frontmatter `definition:` set.")
       .addText((t) =>
         t.setValue(lang.dictionaryFolder).onChange(async (v) => {
           lang.dictionaryFolder = v;
@@ -184,8 +343,32 @@ export class ConlangSettingTab extends PluginSettingTab {
         })
       );
 
-    new Setting(wrap)
+    new Setting(body)
+      .setName("Active")
+      .setDesc("Include this language in hover, lookup, browsing, and highlighting.")
+      .addToggle((tg) =>
+        tg.setValue(isActive).onChange(async (v) => {
+          await this.toggleActive(lang.name, v);
+          this.display();
+        })
+      );
+
+    if (isActive && !isPrimary) {
+      new Setting(body)
+        .setName("Primary language")
+        .setDesc("Target for English-to-conlang translation and default save folder for new entries.")
+        .addButton((b) =>
+          b.setButtonText("Make primary").onClick(async () => {
+            this.plugin.settings.primaryLanguage = lang.name;
+            await this.plugin.saveSettings();
+            this.display();
+          })
+        );
+    }
+
+    new Setting(body)
       .setName("Enable hover tooltips")
+      .setDesc("Show translation tooltips when hovering this language's words.")
       .addToggle((tg) =>
         tg.setValue(lang.hoverEnabled).onChange(async (v) => {
           lang.hoverEnabled = v;
@@ -193,49 +376,45 @@ export class ConlangSettingTab extends PluginSettingTab {
         })
       );
 
-    new Setting(wrap)
-      .setName("Reload dictionary")
-      .setDesc("Re-scan the dictionary folder. Run this after adding new word entries.")
+    new Setting(body)
       .addButton((b) =>
-        b.setButtonText("Reload").onClick(async () => {
-          if (lang.name === this.plugin.settings.activeLanguage) {
-            await this.plugin.reloadActiveLanguage();
-            new Notice(`Reloaded dictionary for ${lang.name}`);
-          } else {
-            new Notice(`Set ${lang.name} as active to reload its dictionary.`);
-          }
+        b.setButtonText("Reload dictionary").onClick(async () => {
+          const n = await this.plugin.reloadActiveLanguage();
+          this.plugin.refreshPanel();
+          this.plugin.refreshHighlights();
+          new Notice(
+            isActive
+              ? `Reloaded — ${n} entries across active languages`
+              : `${lang.name} is inactive; activate it to load its dictionary.`
+          );
         })
-      );
-
-    new Setting(wrap)
-      .setName("Remove language")
+      )
       .addButton((b) =>
         b
-          .setButtonText("Remove")
+          .setButtonText("Remove language")
           .setWarning()
           .onClick(async () => {
-            this.plugin.settings.languages.splice(index, 1);
-            await this.plugin.saveSettings();
-            this.display();
+            this.removeLanguage(index, lang.name);
           })
       );
 
-    // Sheets
-    wrap.createEl("h4", { text: "Cypher sheets" });
-    wrap
-      .createEl("p", {
-        cls: "conlang-help",
-        text:
-          "Sheets run top to bottom. The output of each sheet is the input of the next. " +
-          "Rule types: word (no letter before or after), prefix (no letter before), " +
-          "suffix (no letter after), default (anywhere).",
-      });
-
+    // --- Cypher sheets (nested collapsible) ---
+    const sheetsBody = this.collapsible(body, {
+      title: "Cypher sheets",
+      key: lang.name,
+      store: this.openSheets,
+      badge: String(lang.sheets.length),
+    });
+    sheetsBody.createEl("p", {
+      cls: "conlang-help",
+      text:
+        "Sheets run top to bottom; each sheet's output feeds the next. " +
+        "Rule types: word (whole word), prefix, suffix, default (anywhere).",
+    });
     for (let s = 0; s < lang.sheets.length; s++) {
-      this.renderSheet(wrap, lang, s);
+      this.renderSheet(sheetsBody, lang, s);
     }
-
-    new Setting(wrap).addButton((b) =>
+    new Setting(sheetsBody).addButton((b) =>
       b
         .setButtonText("Add sheet")
         .setCta()
@@ -245,35 +424,35 @@ export class ConlangSettingTab extends PluginSettingTab {
             enabled: true,
             rules: [],
           });
+          this.openSheets.add(lang.name);
           await this.plugin.saveSettings();
           this.display();
         })
     );
 
-    // Inflection rules
-    wrap.createEl("h4", { text: "Inflection rules" });
-    wrap
-      .createEl("p", {
-        cls: "conlang-help",
-        text:
-          "When a word isn't in the dictionary, these rules attempt to find its lemma. " +
-          "Strip removes characters from the end (suffix) or start (prefix); add then attaches " +
-          "characters to reconstruct the lemma. Most rules just chop a suffix off — leave add empty for that. " +
-          "Use add for respellings like English -ies → -y (strip 'ies', add 'y'). " +
-          "Optional POS filter: comma-separated, e.g. 'noun' or 'noun,proper-noun'. Rules without a POS apply to all words. " +
-          "Optional description shown as a hover tooltip in the panel (overrides built-in explanations for common labels). " +
-          "Rules are tried in order; the first whose reconstructed stem exists in the dictionary wins.",
-      });
+    // --- Inflection rules (nested collapsible) ---
+    if (!lang.inflections) lang.inflections = [];
+    const inflBody = this.collapsible(body, {
+      title: "Inflection rules",
+      key: lang.name,
+      store: this.openInflections,
+      badge: String(lang.inflections.length),
+    });
+    inflBody.createEl("p", {
+      cls: "conlang-help",
+      text:
+        "When a word isn't in the dictionary, these rules try to find its lemma. " +
+        "Strip removes characters from the end (suffix) or start (prefix); add then " +
+        "attaches characters to reconstruct the lemma. Most rules just chop a suffix " +
+        "off — leave add empty for that. Use add for respellings (strip 'ies', add 'y'). " +
+        "Optional POS filter: comma-separated, e.g. 'noun' or 'noun,proper-noun'. " +
+        "Rules are tried in order; the first whose reconstructed stem exists wins.",
+    });
 
-    // Preset selector — lets the user load a curated starter kit.
-    // We render preset selection separately so it never accidentally
-    // overwrites the current rules without an explicit confirm.
     let pendingPresetId = "";
-    new Setting(wrap)
+    new Setting(inflBody)
       .setName("Apply preset")
-      .setDesc(
-        "Load a curated starter set. Replaces any existing inflection rules for this language."
-      )
+      .setDesc("Load a curated starter set. Replaces existing inflection rules for this language.")
       .addDropdown((dd) => {
         dd.addOption("", "— pick a preset —");
         for (const preset of INFLECTION_PRESETS) {
@@ -297,57 +476,87 @@ export class ConlangSettingTab extends PluginSettingTab {
             const existingCount = lang.inflections?.length ?? 0;
             const confirmed = await this.confirmPreset(preset, existingCount);
             if (!confirmed) return;
-            // Deep-copy rules so editing one doesn't mutate the preset definition
             lang.inflections = preset.rules.map((r) => ({ ...r }));
+            this.openInflections.add(lang.name);
             await this.plugin.saveSettings();
             this.display();
             new Notice(`Made Up Words: applied preset "${preset.name}"`);
           })
       );
 
-    if (!lang.inflections) lang.inflections = [];
-    this.renderInflectionTable(wrap, lang);
+    this.renderInflectionTable(inflBody, lang);
 
-    new Setting(wrap).addButton((b) =>
-      b
-        .setButtonText("Add inflection rule")
-        .onClick(async () => {
-          (lang.inflections ??= []).push({
-            label: "plural",
-            pattern: "",
-            position: "suffix",
-            strip: "",
-            add: "",
-            enabled: true,
-          });
-          await this.plugin.saveSettings();
-          this.display();
-        })
+    new Setting(inflBody).addButton((b) =>
+      b.setButtonText("Add inflection rule").onClick(async () => {
+        (lang.inflections ??= []).push({
+          label: "plural",
+          pattern: "",
+          position: "suffix",
+          strip: "",
+          add: "",
+          enabled: true,
+        });
+        this.openInflections.add(lang.name);
+        await this.plugin.saveSettings();
+        this.display();
+      })
     );
+  }
+
+  /** Remove a language and keep active/primary references valid. */
+  private async removeLanguage(index: number, name: string): Promise<void> {
+    this.plugin.settings.languages.splice(index, 1);
+    this.plugin.settings.activeLanguages = this.plugin.settings.activeLanguages.filter(
+      (n) => n !== name
+    );
+    if (
+      this.plugin.settings.languages.length > 0 &&
+      this.plugin.settings.activeLanguages.length === 0
+    ) {
+      this.plugin.settings.activeLanguages = [this.plugin.settings.languages[0].name];
+    }
+    if (this.plugin.settings.primaryLanguage === name) {
+      this.plugin.settings.primaryLanguage =
+        this.plugin.settings.activeLanguages[0] ??
+        this.plugin.settings.languages[0]?.name ??
+        "";
+    }
+    this.openCards.delete(name);
+    this.openSheets.delete(name);
+    this.openInflections.delete(name);
+    await this.plugin.saveSettings();
+    await this.plugin.reloadActiveLanguage();
+    this.plugin.refreshPanel();
+    this.plugin.refreshHighlights();
+    this.display();
   }
 
   /**
    * Show a small modal confirming a preset replacement.
-   * Returns true if the user confirmed, false if they cancelled.
-   * If there are no existing rules, we don't bother prompting.
+   * Returns true if confirmed. Skips the prompt when there are no existing rules.
    */
-  private async confirmPreset(preset: { name: string; description: string }, existingCount: number): Promise<boolean> {
+  private async confirmPreset(
+    preset: { name: string; description: string },
+    existingCount: number
+  ): Promise<boolean> {
     if (existingCount === 0) return true;
     return new Promise<boolean>((resolve) => {
-      const modal = new PresetConfirmModal(this.app, preset.name, preset.description, existingCount, resolve);
+      const modal = new PresetConfirmModal(
+        this.app,
+        preset.name,
+        preset.description,
+        existingCount,
+        resolve
+      );
       modal.open();
     });
   }
 
-  private renderSheet(
-    parent: HTMLElement,
-    lang: LanguageConfig,
-    sheetIndex: number
-  ): void {
+  private renderSheet(parent: HTMLElement, lang: LanguageConfig, sheetIndex: number): void {
     const sheet = lang.sheets[sheetIndex];
     const box = parent.createDiv({ cls: "conlang-sheet" });
 
-    const header = new Setting(box)
+    new Setting(box)
       .setName(sheet.name)
       .addToggle((t) =>
         t
@@ -369,49 +578,32 @@ export class ConlangSettingTab extends PluginSettingTab {
           })
       );
 
-    new Setting(box)
-      .setName("Sheet name")
-      .addText((t) =>
-        t.setValue(sheet.name).onChange(async (v) => {
-          sheet.name = v;
-          await this.plugin.saveSettings();
-        })
-      );
+    new Setting(box).setName("Sheet name").addText((t) =>
+      t.setValue(sheet.name).onChange(async (v) => {
+        sheet.name = v;
+        await this.plugin.saveSettings();
+      })
+    );
 
-    // Rules table
     const tableWrap = box.createDiv({ cls: "conlang-rules-wrap" });
     const table = tableWrap.createEl("table", { cls: "conlang-rules-table" });
     const thead = table.createEl("thead").createEl("tr");
-    ["Input", "Output", "Type", "On", ""].forEach((h) =>
-      thead.createEl("th", { text: h })
-    );
+    ["Input", "Output", "Type", "On", ""].forEach((h) => thead.createEl("th", { text: h }));
     const tbody = table.createEl("tbody");
-
     for (let r = 0; r < sheet.rules.length; r++) {
       this.renderRuleRow(tbody, sheet, r);
     }
 
     new Setting(box).addButton((b) =>
-      b
-        .setButtonText("Add rule")
-        .onClick(async () => {
-          sheet.rules.push({
-            input: "",
-            output: "",
-            type: "default",
-            enabled: true,
-          });
-          await this.plugin.saveSettings();
-          this.display();
-        })
+      b.setButtonText("Add rule").onClick(async () => {
+        sheet.rules.push({ input: "", output: "", type: "default", enabled: true });
+        await this.plugin.saveSettings();
+        this.display();
+      })
     );
   }
 
-  private renderRuleRow(
-    tbody: HTMLElement,
-    sheet: CypherSheet,
-    ruleIndex: number
-  ): void {
+  private renderRuleRow(tbody: HTMLElement, sheet: CypherSheet, ruleIndex: number): void {
     const rule = sheet.rules[ruleIndex];
     const tr = tbody.createEl("tr");
 
@@ -471,11 +663,7 @@ export class ConlangSettingTab extends PluginSettingTab {
     }
   }
 
-  private renderInflectionRow(
-    tbody: HTMLElement,
-    lang: LanguageConfig,
-    ruleIndex: number
-  ): void {
+  private renderInflectionRow(tbody: HTMLElement, lang: LanguageConfig, ruleIndex: number): void {
     const rules = lang.inflections!;
     const rule = rules[ruleIndex];
     const tr = tbody.createEl("tr");
@@ -504,8 +692,6 @@ export class ConlangSettingTab extends PluginSettingTab {
 
     mkText(rule.pattern, (v) => {
       rule.pattern = v;
-      // Convenience: if strip is empty, default it to whatever pattern is.
-      // This matches the common case where the user just wants to chop a suffix.
       if (!rule.strip) rule.strip = v;
     });
     mkText(rule.strip, (v) => (rule.strip = v));
@@ -532,8 +718,8 @@ export class ConlangSettingTab extends PluginSettingTab {
 }
 
 /**
- * Small confirmation modal shown before applying a preset that would
- * replace existing inflection rules.
+ * Small confirmation modal shown before applying a preset that would replace
+ * existing inflection rules.
  */
 class PresetConfirmModal extends Modal {
   private presetName: string;
@@ -582,7 +768,6 @@ class PresetConfirmModal extends Modal {
   }
 
   onClose() {
-    // If the user dismissed via the X button without choosing, treat as cancel
     if (!this.decided) this.resolve(false);
     this.contentEl.empty();
   }

@@ -25,6 +25,12 @@ import { EntryCreationModal, EntryCreationOptions } from "./entry-modal";
 import { NameCreationModal, NameCreationResult } from "./name-modal";
 import { LookupModal, LookupMatch } from "./lookup-modal";
 import { WordCreationModal, WordCreationResult } from "./word-modal";
+import {
+  makeHighlightExtension,
+  highlightElement,
+  refreshHighlightEffect,
+} from "./highlight";
+import { EditorView } from "@codemirror/view";
 
 export default class ConlangPlugin extends Plugin {
   settings: ConlangSettings = DEFAULT_SETTINGS;
@@ -33,6 +39,17 @@ export default class ConlangPlugin extends Plugin {
   private tooltipEl: HTMLDivElement | null = null;
   private tooltipHideTimer: number | null = null;
   private lastHoverWord: string | null = null;
+  // Hover throttling: mousemove fires very frequently, and resolving the word
+  // under the cursor calls caretRangeFromPoint (a layout query). We cap this
+  // to one resolve per HOVER_THROTTLE_MS, with a trailing call so the cursor's
+  // final resting position is always resolved.
+  private static readonly HOVER_THROTTLE_MS = 50;
+  private hoverLastRun = 0;
+  private hoverPendingTimer: number | null = null;
+  private lastMouseEvent: MouseEvent | null = null;
+  // Cached "does any active language want hover tooltips" — recomputed on
+  // settings change so the mousemove fast-path is a single boolean check.
+  private hoverActive = false;
 
   async onload() {
     await this.loadSettings();
@@ -40,17 +57,33 @@ export default class ConlangPlugin extends Plugin {
 
     this.app.workspace.onLayoutReady(async () => {
       await this.reloadActiveLanguage();
+      this.updateHoverActive();
       this.refreshPanel();
+      this.refreshHighlights();
       this.maybeShowWelcome();
     });
 
+    // Known-word highlighting: a CM6 editor extension for Live Preview /
+    // Source mode, plus a post-processor for Reading view. Both read the
+    // live dictionary, so they stay in sync as entries change.
+    this.registerEditorExtension(makeHighlightExtension(this));
+    this.registerMarkdownPostProcessor((el) => highlightElement(this, el));
+    this.applyHighlightStyleClass();
+
     this.registerEvent(
       this.app.metadataCache.on("changed", (file) => {
-        const lang = this.getActiveLanguage();
-        if (!lang) return;
-        if (file.path.startsWith(lang.dictionaryFolder)) {
-          this.reloadActiveLanguage().then(() => this.refreshPanel());
-        }
+        this.maybeReloadForPath(file.path);
+      })
+    );
+    // Also react to dictionary files being deleted or renamed so removed words
+    // stop (and renamed words start) highlighting without a manual reload.
+    this.registerEvent(
+      this.app.vault.on("delete", (file) => this.maybeReloadForPath(file.path))
+    );
+    this.registerEvent(
+      this.app.vault.on("rename", (file, oldPath) => {
+        this.maybeReloadForPath(file.path);
+        this.maybeReloadForPath(oldPath);
       })
     );
 
@@ -102,6 +135,7 @@ export default class ConlangPlugin extends Plugin {
       callback: async () => {
         const n = await this.reloadActiveLanguage();
         this.refreshPanel();
+        this.refreshHighlights();
         new Notice(`Made Up Words: loaded ${n} dictionary entries`);
       },
     });
@@ -124,17 +158,40 @@ export default class ConlangPlugin extends Plugin {
       editorCallback: (editor: Editor) => this.lookupWord(editor),
     });
 
-    // Hover tooltip handler
+    this.addCommand({
+      id: "toggle-highlighting",
+      name: "Toggle known-word highlighting",
+      callback: async () => {
+        this.settings.highlightKnownWords = !this.settings.highlightKnownWords;
+        await this.saveSettings();
+        new Notice(
+          `Made Up Words: highlighting ${
+            this.settings.highlightKnownWords ? "on" : "off"
+          }`
+        );
+      },
+    });
+
+    // Hover tooltip handler (throttled — see onMouseMove)
     this.registerDomEvent(document, "mousemove", (evt) => {
-      this.handleHover(evt);
+      this.onMouseMove(evt);
     });
   }
 
   onunload() {
     this.hideTooltip();
+    if (this.hoverPendingTimer !== null) {
+      window.clearTimeout(this.hoverPendingTimer);
+      this.hoverPendingTimer = null;
+    }
     if (this.tooltipEl && this.tooltipEl.parentElement) {
       this.tooltipEl.parentElement.removeChild(this.tooltipEl);
     }
+    document.body.removeClass(
+      "conlang-hl-underline",
+      "conlang-hl-italic",
+      "conlang-hl-background"
+    );
   }
 
   async loadSettings() {
@@ -185,7 +242,9 @@ export default class ConlangPlugin extends Plugin {
 
   async saveSettings() {
     await this.saveData(this.settings);
+    this.updateHoverActive();
     this.refreshPanel();
+    this.refreshHighlights();
   }
 
   /**
@@ -283,6 +342,84 @@ export default class ConlangPlugin extends Plugin {
       const view = leaf.view;
       if (view instanceof TranslationPanelView) {
         view.refresh();
+      }
+    }
+  }
+
+  /**
+   * Set the body-level class that drives the highlight appearance. CSS keys
+   * off "conlang-hl-<style>" so the underline/italic/background variants are
+   * pure styling with no inline styles. Cleared entirely when highlighting
+   * is off so no stray rules apply.
+   */
+  applyHighlightStyleClass() {
+    document.body.removeClass(
+      "conlang-hl-underline",
+      "conlang-hl-italic",
+      "conlang-hl-background"
+    );
+    if (this.settings.highlightKnownWords) {
+      document.body.addClass(`conlang-hl-${this.settings.highlightStyle}`);
+    }
+  }
+
+  /**
+   * Recompute highlighting everywhere after the dictionary or settings
+   * change. Editors are nudged with a refresh effect so the CM6 ViewPlugin
+   * rebuilds its decorations; Reading views are re-rendered so the
+   * post-processor runs again.
+   */
+  /**
+   * If `path` falls inside ANY active language's dictionary folder, reload the
+   * dictionary and refresh the panel + highlights. Used by the metadata and
+   * vault watchers so added/edited/deleted/renamed entries take effect live.
+   *
+   * Previously this only watched the *primary* language's folder, so words kept
+   * in another active language's folder never triggered a live refresh.
+   */
+  private maybeReloadForPath(path: string) {
+    const inDict = this.getActiveLanguages().some(
+      (l) => l.dictionaryFolder && path.startsWith(l.dictionaryFolder)
+    );
+    if (!inDict) return;
+    this.reloadActiveLanguage().then(() => {
+      this.refreshPanel();
+      this.refreshHighlights();
+    });
+  }
+
+  refreshHighlights() {
+    this.applyHighlightStyleClass();
+    // Primary mechanism: re-apply registered editor extensions across every
+    // editor. This re-instantiates our ViewPlugin and re-runs its build()
+    // against the current dictionary, and works even when an individual
+    // EditorView handle isn't reachable (e.g. Reading mode or cached panes).
+    try {
+      this.app.workspace.updateOptions();
+    } catch (e) {
+      console.error("[Made Up Words] updateOptions failed:", e);
+    }
+    for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
+      const view = leaf.view;
+      if (!(view instanceof MarkdownView)) continue;
+      // Secondary: nudge the live editor directly, in case updateOptions
+      // didn't recreate the ViewPlugin for this pane.
+      const cm = (view.editor as any)?.cm as EditorView | undefined;
+      if (cm) {
+        try {
+          cm.dispatch({ effects: refreshHighlightEffect.of(null) });
+        } catch (e) {
+          /* non-fatal */
+        }
+      }
+      // Re-render Reading-view panes so the markdown post-processor re-runs.
+      const preview = (view as any).previewMode;
+      if (preview && typeof preview.rerender === "function") {
+        try {
+          preview.rerender(true);
+        } catch (e) {
+          /* non-fatal */
+        }
       }
     }
   }
@@ -615,6 +752,7 @@ export default class ConlangPlugin extends Plugin {
     await this.waitForFrontmatter(file);
     await this.reloadActiveLanguage();
     this.refreshPanel();
+    this.refreshHighlights();
     this.lastHoverWord = null; // force the next hover to re-resolve against the new index
     new Notice(`Conlang: created entry "${translated}"`);
   }
@@ -674,6 +812,7 @@ export default class ConlangPlugin extends Plugin {
     await this.waitForFrontmatter(file);
     await this.reloadActiveLanguage();
     this.refreshPanel();
+    this.refreshHighlights();
     this.lastHoverWord = null;
     new Notice(`Conlang: added "${result.conlangWord}"`);
   }
@@ -727,6 +866,7 @@ export default class ConlangPlugin extends Plugin {
     await this.waitForFrontmatter(file);
     await this.reloadActiveLanguage();
     this.refreshPanel();
+    this.refreshHighlights();
     this.lastHoverWord = null;
     new Notice(`Conlang: created name "${result.conlangForm}"`);
   }
@@ -788,13 +928,42 @@ export default class ConlangPlugin extends Plugin {
   // Tooltip shows dictionary definitions when available, falls back to
   // a cypher preview so every word gives feedback.
 
+  /**
+   * Recompute whether any active language wants hover tooltips. Called on load
+   * and whenever settings change, so the mousemove handler can bail out with a
+   * single boolean check instead of scanning languages on every event.
+   */
+  private updateHoverActive() {
+    this.hoverActive = this.getActiveLanguages().some((l) => l.hoverEnabled);
+  }
+
+  /**
+   * Throttled entry point for mousemove. Resolving the word under the cursor
+   * uses caretRangeFromPoint, which forces a layout flush, so we cap how often
+   * handleHover runs. A leading call keeps the tooltip responsive; a single
+   * trailing timer guarantees the cursor's final resting position resolves.
+   */
+  private onMouseMove(evt: MouseEvent) {
+    if (!this.hoverActive) return;
+    this.lastMouseEvent = evt;
+    const now = Date.now();
+    const since = now - this.hoverLastRun;
+    if (since >= ConlangPlugin.HOVER_THROTTLE_MS) {
+      this.hoverLastRun = now;
+      this.handleHover(evt);
+    } else if (this.hoverPendingTimer === null) {
+      this.hoverPendingTimer = window.setTimeout(() => {
+        this.hoverPendingTimer = null;
+        this.hoverLastRun = Date.now();
+        if (this.lastMouseEvent) this.handleHover(this.lastMouseEvent);
+      }, ConlangPlugin.HOVER_THROTTLE_MS - since);
+    }
+  }
+
   private handleHover(evt: MouseEvent) {
-    // Hover fires when at least one active language has hover enabled.
-    // With multi-language, the answer to "should I show a tooltip" can't
-    // depend on a single language anymore.
-    const activeLangs = this.getActiveLanguages();
-    const anyHoverEnabled = activeLangs.some((l) => l.hoverEnabled);
-    if (!anyHoverEnabled) {
+    // Fast-path guard: if no active language wants hover tooltips, do nothing.
+    // (Cached via updateHoverActive so this stays a single boolean check.)
+    if (!this.hoverActive) {
       this.hideTooltip();
       return;
     }
