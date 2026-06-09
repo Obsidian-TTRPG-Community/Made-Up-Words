@@ -490,42 +490,55 @@ var Dictionary = class {
     }
   }
   /**
-   * Format an entry for display in a hover tooltip.
+   * Render an entry into a hover tooltip element using safe DOM construction.
+   * Inline parts are separated by spaces to match the previous layout.
    */
-  static formatTooltip(entry) {
-    const parts = [];
-    parts.push(`<strong>${escapeHtml(entry.word)}</strong>`);
+  static renderTooltip(entry, parent) {
+    const sep = () => {
+      if (parent.childNodes.length > 0) parent.appendText(" ");
+    };
+    sep();
+    parent.createEl("strong", { text: entry.word });
     if (entry.aliases && entry.aliases.length > 0) {
-      parts.push(
-        `<span class="conlang-tooltip-aliases">(also: ${entry.aliases.map(escapeHtml).join(", ")})</span>`
-      );
+      sep();
+      parent.createSpan({
+        cls: "conlang-tooltip-aliases",
+        text: `(also: ${entry.aliases.join(", ")})`
+      });
     }
     if (entry.partOfSpeech) {
-      parts.push(`<em>${escapeHtml(entry.partOfSpeech)}</em>`);
+      sep();
+      parent.createEl("em", { text: entry.partOfSpeech });
     }
     if (entry.nameCategory) {
-      parts.push(`<span class="conlang-tooltip-category">${escapeHtml(entry.nameCategory)}</span>`);
+      sep();
+      parent.createSpan({
+        cls: "conlang-tooltip-category",
+        text: entry.nameCategory
+      });
     }
     if (entry.ipa) {
-      parts.push(escapeHtml(entry.ipa));
+      sep();
+      parent.appendText(entry.ipa);
     }
-    parts.push(`<div class="conlang-tooltip-def">${escapeHtml(entry.definition)}</div>`);
+    sep();
+    parent.createDiv({ cls: "conlang-tooltip-def", text: entry.definition });
     if (entry.bodyPreview) {
-      parts.push(
-        `<div class="conlang-tooltip-preview">${escapeHtml(entry.bodyPreview)}</div>`
-      );
+      sep();
+      parent.createDiv({
+        cls: "conlang-tooltip-preview",
+        text: entry.bodyPreview
+      });
     }
     if (entry.etymology) {
-      parts.push(
-        `<div class="conlang-tooltip-etym">Etymology: ${escapeHtml(entry.etymology)}</div>`
-      );
+      sep();
+      parent.createDiv({
+        cls: "conlang-tooltip-etym",
+        text: `Etymology: ${entry.etymology}`
+      });
     }
-    return parts.join(" ");
   }
 };
-function escapeHtml(s) {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
-}
 
 // inflection.ts
 function findInflection(word, dictionary, rules) {
@@ -775,12 +788,12 @@ var ConlangSettingTab = class extends import_obsidian2.PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
     containerEl.addClass("conlang-settings");
-    containerEl.createEl("h2", { text: "Made Up Words" });
+    new import_obsidian2.Setting(containerEl).setName("Made Up Words").setHeading();
     this.renderLanguageOverview(containerEl);
     this.renderHoverSection(containerEl);
     this.renderHighlightSection(containerEl);
     this.renderTranslationSection(containerEl);
-    containerEl.createEl("h3", { text: "Per-language settings" });
+    new import_obsidian2.Setting(containerEl).setName("Per-language settings").setHeading();
     containerEl.createEl("p", {
       cls: "conlang-help",
       text: "Each language is a card below. Expand one to edit its dictionary folder, cypher sheets, and inflection rules."
@@ -791,7 +804,7 @@ var ConlangSettingTab = class extends import_obsidian2.PluginSettingTab {
   }
   // ===== Top overview =====
   renderLanguageOverview(containerEl) {
-    containerEl.createEl("h3", { text: "Languages" });
+    new import_obsidian2.Setting(containerEl).setName("Languages").setHeading();
     new import_obsidian2.Setting(containerEl).setName("Active languages").setDesc(
       "Active languages contribute to hover, lookup, dictionary browsing, and highlighting. Tick to activate; click the star to set the primary."
     );
@@ -879,7 +892,7 @@ var ConlangSettingTab = class extends import_obsidian2.PluginSettingTab {
   }
   // ===== Behaviour sections =====
   renderHoverSection(containerEl) {
-    containerEl.createEl("h3", { text: "Hover tooltips" });
+    new import_obsidian2.Setting(containerEl).setName("Hover tooltips").setHeading();
     new import_obsidian2.Setting(containerEl).setName("Hover modifier key").setDesc(
       "Hold this key while hovering to see translation tooltips. 'None' shows a tooltip on any hover. Hover can also be turned off per language in each card below."
     ).addDropdown((dd) => {
@@ -906,7 +919,7 @@ var ConlangSettingTab = class extends import_obsidian2.PluginSettingTab {
     });
   }
   renderHighlightSection(containerEl) {
-    containerEl.createEl("h3", { text: "Highlighting" });
+    new import_obsidian2.Setting(containerEl).setName("Highlighting").setHeading();
     new import_obsidian2.Setting(containerEl).setName("Highlight known words in notes").setDesc(
       "Visually mark recognised words in both the editor and Reading view."
     ).addToggle(
@@ -947,7 +960,7 @@ var ConlangSettingTab = class extends import_obsidian2.PluginSettingTab {
     );
   }
   renderTranslationSection(containerEl) {
-    containerEl.createEl("h3", { text: "Translation" });
+    new import_obsidian2.Setting(containerEl).setName("Translation").setHeading();
     new import_obsidian2.Setting(containerEl).setName("Commit wrapper").setDesc(
       "How committed translations are stored in the note. HTML tooltip is recommended (uses native <abbr> tags)."
     ).addDropdown((dd) => {
@@ -1780,17 +1793,17 @@ var TranslationPanelView = class extends import_obsidian3.ItemView {
     mkTab("dictionary", "Dictionary");
   }
   showActiveTab() {
-    this.translateEmptyEl.style.display = "none";
-    this.translateBodyEl.style.display = "none";
-    this.browserEl.style.display = "none";
-    this.translatorEl.style.display = "none";
+    this.translateEmptyEl.addClass("conlang-hidden");
+    this.translateBodyEl.addClass("conlang-hidden");
+    this.browserEl.addClass("conlang-hidden");
+    this.translatorEl.addClass("conlang-hidden");
     if (this.activeTab === "translate") {
-      this.translateEmptyEl.style.display = "block";
+      this.translateEmptyEl.removeClass("conlang-hidden");
     } else if (this.activeTab === "dictionary") {
-      this.browserEl.style.display = "block";
+      this.browserEl.removeClass("conlang-hidden");
     } else if (this.activeTab === "translator") {
-      this.translatorEl.style.display = "block";
-      setTimeout(() => {
+      this.translatorEl.removeClass("conlang-hidden");
+      window.setTimeout(() => {
         var _a;
         return (_a = this.translatorInputEl) == null ? void 0 : _a.focus();
       }, 0);
@@ -1807,7 +1820,9 @@ var TranslationPanelView = class extends import_obsidian3.ItemView {
     hint.setText(
       "This tab updates automatically as you select text. Select English to see how it translates, or select a conlang word to see its dictionary entry. For free-form typing, use the Translator tab instead."
     );
-    this.translateBodyEl = this.tabContentEl.createDiv({ cls: "conlang-panel-body" });
+    this.translateBodyEl = this.tabContentEl.createDiv({
+      cls: "conlang-panel-body conlang-hidden"
+    });
     const translationBlock = this.translateBodyEl.createDiv({ cls: "conlang-panel-block" });
     this.sourceLabel = translationBlock.createDiv({ cls: "conlang-panel-label" });
     this.sourceText = translationBlock.createDiv({
@@ -1836,12 +1851,12 @@ var TranslationPanelView = class extends import_obsidian3.ItemView {
     if (text === this.lastRenderedText) return;
     this.lastRenderedText = text;
     if (!text || text.trim().length === 0) {
-      this.translateBodyEl.style.display = "none";
-      this.translateEmptyEl.style.display = "block";
+      this.translateBodyEl.addClass("conlang-hidden");
+      this.translateEmptyEl.removeClass("conlang-hidden");
       return;
     }
-    this.translateEmptyEl.style.display = "none";
-    this.translateBodyEl.style.display = "block";
+    this.translateEmptyEl.addClass("conlang-hidden");
+    this.translateBodyEl.removeClass("conlang-hidden");
     const wordMatch = this.detectSingleWord(text);
     if (wordMatch) {
       this.renderWordDetails(text, wordMatch.entry, wordMatch.viaInflection);
@@ -1996,7 +2011,7 @@ var TranslationPanelView = class extends import_obsidian3.ItemView {
         note.addClass("has-explanation");
       }
     }
-    card.style.cursor = "pointer";
+    card.addClass("conlang-clickable");
     card.addEventListener("click", async () => {
       const file = this.plugin.app.vault.getAbstractFileByPath(entry.path);
       if (file instanceof import_obsidian3.TFile) {
@@ -2071,7 +2086,7 @@ var TranslationPanelView = class extends import_obsidian3.ItemView {
         const meaningEl = chip.createSpan({ cls: "conlang-part-meaning" });
         const sense = firstSense(entry.definition);
         meaningEl.setText(sense || entry.definition);
-        chip.style.cursor = "pointer";
+        chip.addClass("conlang-clickable");
         chip.addEventListener("click", async () => {
           const file = this.plugin.app.vault.getAbstractFileByPath(entry.path);
           if (file instanceof import_obsidian3.TFile) {
@@ -2191,7 +2206,7 @@ var TranslationPanelView = class extends import_obsidian3.ItemView {
       const etym = card.createDiv({ cls: "conlang-panel-entry-etym" });
       etym.setText(`Etymology: ${entry.etymology}`);
     }
-    card.style.cursor = "pointer";
+    card.addClass("conlang-clickable");
     card.addEventListener("click", async () => {
       const file = this.plugin.app.vault.getAbstractFileByPath(entry.path);
       if (file instanceof import_obsidian3.TFile) {
@@ -2421,7 +2436,7 @@ var TranslationPanelView = class extends import_obsidian3.ItemView {
       parts.push(`"${sense}"`);
     }
     meta.setText(parts.join(" \xB7 "));
-    card.style.cursor = "pointer";
+    card.addClass("conlang-clickable");
     card.addEventListener("click", async () => {
       const file = this.plugin.app.vault.getAbstractFileByPath(entry.path);
       if (file instanceof import_obsidian3.TFile) {
@@ -2447,7 +2462,7 @@ var TranslationPanelView = class extends import_obsidian3.ItemView {
       }
       const def = row.createSpan({ cls: "conlang-gloss-candidate-def" });
       def.setText(entry.definition);
-      row.style.cursor = "pointer";
+      row.addClass("conlang-clickable");
       row.addEventListener("click", async (e) => {
         e.stopPropagation();
         const file = this.plugin.app.vault.getAbstractFileByPath(entry.path);
@@ -2636,7 +2651,9 @@ var TranslationPanelView = class extends import_obsidian3.ItemView {
     }
     this.browserStatsEl = this.browserEl.createDiv({ cls: "conlang-browser-stats" });
     this.browserListEl = this.browserEl.createDiv({ cls: "conlang-browser-list" });
-    this.browserEmptyEl = this.browserEl.createDiv({ cls: "conlang-browser-empty" });
+    this.browserEmptyEl = this.browserEl.createDiv({
+      cls: "conlang-browser-empty conlang-hidden"
+    });
   }
   renderBrowser() {
     var _a;
@@ -2699,8 +2716,8 @@ var TranslationPanelView = class extends import_obsidian3.ItemView {
     });
     this.renderStats(all, filtered);
     if (filtered.length === 0) {
-      this.browserListEl.style.display = "none";
-      this.browserEmptyEl.style.display = "block";
+      this.browserListEl.addClass("conlang-hidden");
+      this.browserEmptyEl.removeClass("conlang-hidden");
       this.browserEmptyEl.empty();
       if (all.length > 0) {
         this.browserEmptyEl.createDiv({
@@ -2724,8 +2741,8 @@ var TranslationPanelView = class extends import_obsidian3.ItemView {
       }
       return;
     }
-    this.browserListEl.style.display = "block";
-    this.browserEmptyEl.style.display = "none";
+    this.browserListEl.removeClass("conlang-hidden");
+    this.browserEmptyEl.addClass("conlang-hidden");
     for (const entry of filtered) {
       this.renderBrowserRow(entry);
     }
@@ -3187,7 +3204,7 @@ var LookupModal = class extends import_obsidian6.Modal {
     }
   }
   wireOpenEntry(row, entry) {
-    row.style.cursor = "pointer";
+    row.addClass("conlang-clickable");
     row.addEventListener("click", async () => {
       const file = this.app.vault.getAbstractFileByPath(entry.path);
       if (file instanceof import_obsidian6.TFile) {
@@ -3705,7 +3722,7 @@ var _ConlangPlugin = class _ConlangPlugin extends import_obsidian8.Plugin {
     try {
       const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_PANEL);
       if (existing.length > 0) {
-        this.app.workspace.revealLeaf(existing[0]);
+        await this.app.workspace.revealLeaf(existing[0]);
         return;
       }
       let leaf = this.app.workspace.getRightLeaf(false);
@@ -3717,7 +3734,7 @@ var _ConlangPlugin = class _ConlangPlugin extends import_obsidian8.Plugin {
         return;
       }
       await leaf.setViewState({ type: VIEW_TYPE_PANEL, active: true });
-      this.app.workspace.revealLeaf(leaf);
+      await this.app.workspace.revealLeaf(leaf);
     } catch (e) {
       console.error("[Conlang] openPanel failed:", e);
       new import_obsidian8.Notice("Made Up Words: failed to open panel \u2014 see developer console");
@@ -4435,7 +4452,7 @@ var _ConlangPlugin = class _ConlangPlugin extends import_obsidian8.Plugin {
       this.lastHoverWord = null;
       return;
     }
-    if (cleaned === this.lastHoverWord && this.tooltipEl && this.tooltipEl.style.display !== "none") {
+    if (cleaned === this.lastHoverWord && this.tooltipEl && this.tooltipEl.hasClass("conlang-tooltip-visible")) {
       this.positionTooltip(evt.clientX, evt.clientY);
       return;
     }
@@ -4594,8 +4611,9 @@ var _ConlangPlugin = class _ConlangPlugin extends import_obsidian8.Plugin {
       this.tooltipHideTimer = null;
     }
     const el = this.ensureTooltipEl();
-    el.innerHTML = Dictionary.formatTooltip(entry);
-    el.style.display = "block";
+    el.empty();
+    Dictionary.renderTooltip(entry, el);
+    el.addClass("conlang-tooltip-visible");
     this.positionTooltip(x, y);
   }
   showInflectionTooltip(x, y, match) {
@@ -4604,8 +4622,13 @@ var _ConlangPlugin = class _ConlangPlugin extends import_obsidian8.Plugin {
       this.tooltipHideTimer = null;
     }
     const el = this.ensureTooltipEl();
-    el.innerHTML = Dictionary.formatTooltip(match.lemma) + `<div class="conlang-tooltip-inflection">${escapeHtml2(match.inflectedForm)} = ${escapeHtml2(match.rule.label)} of ${escapeHtml2(match.lemma.word)}</div>`;
-    el.style.display = "block";
+    el.empty();
+    Dictionary.renderTooltip(match.lemma, el);
+    el.createDiv({
+      cls: "conlang-tooltip-inflection",
+      text: `${match.inflectedForm} = ${match.rule.label} of ${match.lemma.word}`
+    });
+    el.addClass("conlang-tooltip-visible");
     this.positionTooltip(x, y);
   }
   /**
@@ -4619,28 +4642,30 @@ var _ConlangPlugin = class _ConlangPlugin extends import_obsidian8.Plugin {
       this.tooltipHideTimer = null;
     }
     const el = this.ensureTooltipEl();
-    const parts = [];
+    el.empty();
     const languages = new Set(entries.map((e) => e.language).filter(Boolean));
     const headerSummary = languages.size > 1 ? `${entries.length} matches across ${languages.size} languages` : `${entries.length} senses`;
-    parts.push(
-      `<div class="conlang-tooltip-multisense-header"><strong>${escapeHtml2(sourceWord)}</strong> \u2014 ${headerSummary}</div>`
-    );
+    const header = el.createDiv({ cls: "conlang-tooltip-multisense-header" });
+    header.createEl("strong", { text: sourceWord });
+    header.appendText(` \u2014 ${headerSummary}`);
     for (const entry of entries) {
-      const senseParts = [];
-      senseParts.push(`<strong>${escapeHtml2(entry.word)}</strong>`);
+      const sense = el.createDiv({ cls: "conlang-tooltip-sense" });
+      sense.createEl("strong", { text: entry.word });
       if (languages.size > 1 && entry.language) {
-        senseParts.push(
-          `<span class="conlang-tooltip-lang">${escapeHtml2(entry.language)}</span>`
-        );
+        sense.appendText(" ");
+        sense.createSpan({ cls: "conlang-tooltip-lang", text: entry.language });
       }
       if (entry.partOfSpeech) {
-        senseParts.push(`<em>${escapeHtml2(entry.partOfSpeech)}</em>`);
+        sense.appendText(" ");
+        sense.createEl("em", { text: entry.partOfSpeech });
       }
-      senseParts.push(`<span class="conlang-tooltip-sense-def">${escapeHtml2(entry.definition)}</span>`);
-      parts.push(`<div class="conlang-tooltip-sense">${senseParts.join(" ")}</div>`);
+      sense.appendText(" ");
+      sense.createSpan({
+        cls: "conlang-tooltip-sense-def",
+        text: entry.definition
+      });
     }
-    el.innerHTML = parts.join("");
-    el.style.display = "block";
+    el.addClass("conlang-tooltip-visible");
     this.positionTooltip(x, y);
   }
   showCypherTooltip(x, y, original, translated) {
@@ -4649,15 +4674,16 @@ var _ConlangPlugin = class _ConlangPlugin extends import_obsidian8.Plugin {
       this.tooltipHideTimer = null;
     }
     const el = this.ensureTooltipEl();
-    el.innerHTML = `
-      <div class="conlang-tooltip-cypher">
-        <span class="conlang-tooltip-original">${escapeHtml2(original)}</span>
-        <span class="conlang-tooltip-arrow-inline">\u2192</span>
-        <span class="conlang-tooltip-translation">${escapeHtml2(translated)}</span>
-      </div>
-      <div class="conlang-tooltip-hint">cypher only \u2014 not in dictionary</div>
-    `;
-    el.style.display = "block";
+    el.empty();
+    const cypher = el.createDiv({ cls: "conlang-tooltip-cypher" });
+    cypher.createSpan({ cls: "conlang-tooltip-original", text: original });
+    cypher.createSpan({ cls: "conlang-tooltip-arrow-inline", text: "\u2192" });
+    cypher.createSpan({ cls: "conlang-tooltip-translation", text: translated });
+    el.createDiv({
+      cls: "conlang-tooltip-hint",
+      text: "cypher only \u2014 not in dictionary"
+    });
+    el.addClass("conlang-tooltip-visible");
     this.positionTooltip(x, y);
   }
   positionTooltip(x, y) {
@@ -4684,7 +4710,7 @@ var _ConlangPlugin = class _ConlangPlugin extends import_obsidian8.Plugin {
   }
   hideTooltip() {
     if (this.tooltipEl) {
-      this.tooltipEl.style.display = "none";
+      this.tooltipEl.removeClass("conlang-tooltip-visible");
     }
   }
 };
@@ -4694,6 +4720,3 @@ var _ConlangPlugin = class _ConlangPlugin extends import_obsidian8.Plugin {
 // final resting position is always resolved.
 _ConlangPlugin.HOVER_THROTTLE_MS = 50;
 var ConlangPlugin = _ConlangPlugin;
-function escapeHtml2(s) {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
-}

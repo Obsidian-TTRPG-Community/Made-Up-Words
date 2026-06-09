@@ -1,11 +1,12 @@
 {
   "name": "made-up-words",
-  "version": "0.17.0",
+  "version": "0.17.1",
   "description": "A dictionary for the words you've made up, in Obsidian",
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",
-    "build": "node esbuild.config.mjs production"
+    "build": "node esbuild.config.mjs production",
+    "lint": "eslint \"**/*.ts\""
   },
   "keywords": [
     "obsidian",
@@ -24,9 +25,12 @@
     "@codemirror/state": "^6.0.0",
     "@codemirror/view": "^6.0.0",
     "@types/node": "^16.11.6",
+    "@typescript-eslint/parser": "^8.0.0",
     "esbuild": "^0.25.0",
+    "eslint": "^9.0.0",
+    "eslint-plugin-obsidianmd": "latest",
     "obsidian": "latest",
     "tslib": "2.4.0",
-    "typescript": "4.7.4"
+    "typescript": "^4.9.5"
   }
 }
