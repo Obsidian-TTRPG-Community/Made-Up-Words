@@ -874,7 +874,7 @@ export class TranslationPanelView extends ItemView {
     const modeLabel = modeRow.createSpan({ cls: "conlang-browser-control-label" });
     modeLabel.setText("Mode");
     const modeGroup = modeRow.createDiv({ cls: "conlang-browser-segmented" });
-    const modes: { value: typeof this.translatorMode; label: string; tooltip: string }[] = [
+    const modes: { value: "gloss" | "transliterate"; label: string; tooltip: string }[] = [
       {
         value: "gloss",
         label: "Gloss",
@@ -1307,7 +1307,11 @@ export class TranslationPanelView extends ItemView {
     const namesLabel = controlsRow.createSpan({ cls: "conlang-browser-control-label" });
     namesLabel.setText("Names");
     const namesGroup = controlsRow.createDiv({ cls: "conlang-browser-segmented" });
-    const namesOptions: { value: typeof this.nameFilter; label: string; tooltip: string }[] = [
+    const namesOptions: {
+      value: "all" | "names-only" | "hide-names";
+      label: string;
+      tooltip: string;
+    }[] = [
       { value: "all", label: "All", tooltip: "Show all entries, including proper nouns." },
       { value: "names-only", label: "Only", tooltip: "Show only proper nouns (characters, places, factions, etc.)." },
       { value: "hide-names", label: "Hide", tooltip: "Hide all proper nouns from the list." },

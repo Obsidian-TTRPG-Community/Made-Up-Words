@@ -179,7 +179,7 @@ export class Dictionary {
     // Coerce values that should be string-ish. If a user wrote a number or
     // YAML date by accident, we still get something workable rather than
     // crashing or silently dropping the entry.
-    const asString = (v: any): string | undefined => {
+    const asString = (v: unknown): string | undefined => {
       if (v === undefined || v === null) return undefined;
       if (typeof v === "string") return v;
       if (typeof v === "number" || typeof v === "boolean") return String(v);

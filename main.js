@@ -4601,7 +4601,7 @@ var _ConlangPlugin = class _ConlangPlugin extends import_obsidian8.Plugin {
   }
   ensureTooltipEl() {
     if (!this.tooltipEl) {
-      this.tooltipEl = document.createElement("div");
+      this.tooltipEl = activeDocument.createElement("div");
       this.tooltipEl.addClass("conlang-tooltip");
       activeDocument.body.appendChild(this.tooltipEl);
     }

@@ -289,9 +289,7 @@
 }
 
 .conlang-translit-dict.multi-sense {
-  text-decoration-line: underline;
-  text-decoration-style: dotted;
-  text-decoration-color: var(--text-faint);
+  text-decoration: underline dotted var(--text-faint);
   cursor: help;
 }
 
@@ -1297,9 +1295,7 @@
 /* Conventional "more info on hover" cue: dotted underline + help cursor */
 .conlang-form-label.has-explanation,
 .conlang-word-card-note.has-explanation {
-  text-decoration-line: underline;
-  text-decoration-style: dotted;
-  text-decoration-color: var(--text-faint);
+  text-decoration: underline dotted var(--text-faint);
   text-underline-offset: 2px;
   cursor: help;
 }
@@ -1344,16 +1340,12 @@
 
 /* Underline style (default) */
 body.conlang-hl-underline .conlang-known-word.is-conlang {
-  text-decoration-line: underline;
-  text-decoration-style: dotted;
-  text-decoration-color: var(--conlang-known-color);
+  text-decoration: underline dotted var(--conlang-known-color);
   text-underline-offset: 2px;
   color: var(--conlang-known-color);
 }
 body.conlang-hl-underline .conlang-known-word.is-english {
-  text-decoration-line: underline;
-  text-decoration-style: dotted;
-  text-decoration-color: var(--conlang-known-english-color);
+  text-decoration: underline dotted var(--conlang-known-english-color);
   text-underline-offset: 2px;
 }
 
