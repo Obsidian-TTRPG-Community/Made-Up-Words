@@ -35,7 +35,7 @@ export class ConlangSettingTab extends PluginSettingTab {
     this.renderHighlightSection(containerEl);
     this.renderTranslationSection(containerEl);
 
-    new Setting(containerEl).setName("Per-language options").setHeading();
+    new Setting(containerEl).setName("Individual languages").setHeading();
     containerEl.createEl("p", {
       cls: "conlang-help",
       text:

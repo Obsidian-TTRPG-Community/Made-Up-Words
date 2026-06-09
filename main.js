@@ -792,7 +792,7 @@ var ConlangSettingTab = class extends import_obsidian2.PluginSettingTab {
     this.renderHoverSection(containerEl);
     this.renderHighlightSection(containerEl);
     this.renderTranslationSection(containerEl);
-    new import_obsidian2.Setting(containerEl).setName("Per-language options").setHeading();
+    new import_obsidian2.Setting(containerEl).setName("Individual languages").setHeading();
     containerEl.createEl("p", {
       cls: "conlang-help",
       text: "Each language is a card below. Expand one to edit its dictionary folder, cypher sheets, and inflection rules."
