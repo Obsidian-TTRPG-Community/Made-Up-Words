@@ -29,14 +29,13 @@ export class ConlangSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
     containerEl.addClass("conlang-settings");
-    new Setting(containerEl).setName("Made Up Words").setHeading();
 
     this.renderLanguageOverview(containerEl);
     this.renderHoverSection(containerEl);
     this.renderHighlightSection(containerEl);
     this.renderTranslationSection(containerEl);
 
-    new Setting(containerEl).setName("Per-language settings").setHeading();
+    new Setting(containerEl).setName("Per-language options").setHeading();
     containerEl.createEl("p", {
       cls: "conlang-help",
       text:
