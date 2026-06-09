@@ -42,8 +42,16 @@ export const refreshHighlightEffect = StateEffect.define<null>();
  * blocks, inline code, frontmatter, math, or HTML. Highlighting inside those
  * would be noise (and could corrupt code the user is reading).
  */
+interface SyntaxNodeLike {
+  type: { name: string };
+  parent: SyntaxNodeLike | null;
+}
+
 function isExcludedPos(view: EditorView, pos: number): boolean {
-  let node: any = syntaxTree(view.state).resolveInner(pos, 1);
+  let node: SyntaxNodeLike | null = syntaxTree(view.state).resolveInner(
+    pos,
+    1
+  ) as SyntaxNodeLike;
   while (node) {
     const name: string = node.type.name || "";
     if (/code|frontmatter|math|html|comment/i.test(name)) return true;
@@ -113,7 +121,7 @@ export function makeHighlightExtension(plugin: ConlangPlugin) {
 export function highlightElement(plugin: ConlangPlugin, root: HTMLElement) {
   if (!plugin.settings.highlightKnownWords) return;
 
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+  const walker = activeDocument.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
       const parent = node.parentElement;
       if (!parent) return NodeFilter.FILTER_REJECT;
@@ -144,20 +152,20 @@ function replaceTextNode(plugin: ConlangPlugin, textNode: Text) {
   const spans = highlightSpans(plugin, text, 0);
   if (spans.length === 0) return;
 
-  const frag = document.createDocumentFragment();
+  const frag = activeDocument.createDocumentFragment();
   let cursor = 0;
   for (const span of spans) {
     if (span.from > cursor) {
-      frag.appendChild(document.createTextNode(text.slice(cursor, span.from)));
+      frag.appendChild(activeDocument.createTextNode(text.slice(cursor, span.from)));
     }
-    const el = document.createElement("span");
+    const el = activeDocument.createElement("span");
     el.className = classForKind(span.kind);
     el.textContent = text.slice(span.from, span.to);
     frag.appendChild(el);
     cursor = span.to;
   }
   if (cursor < text.length) {
-    frag.appendChild(document.createTextNode(text.slice(cursor)));
+    frag.appendChild(activeDocument.createTextNode(text.slice(cursor)));
   }
   textNode.parentNode?.replaceChild(frag, textNode);
 }

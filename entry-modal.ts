@@ -76,7 +76,7 @@ export class EntryCreationModal extends Modal {
     this.posInput = contentEl.createEl("input", { type: "text" });
     this.posInput.placeholder = "e.g. noun, verb, adjective…";
     this.posInput.addClass("conlang-modal-input");
-    setTimeout(() => this.posInput.focus(), 0);
+    window.setTimeout(() => this.posInput.focus(), 0);
 
     this.posInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
@@ -216,7 +216,7 @@ export class MultiEntryModal extends Modal {
       this.rows.push({ init, checkbox, formInput });
     }
 
-    setTimeout(() => this.posInput.focus(), 0);
+    window.setTimeout(() => this.posInput.focus(), 0);
     contentEl.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();

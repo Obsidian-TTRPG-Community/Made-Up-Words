@@ -9,7 +9,7 @@
 
 import { App, PluginSettingTab, Setting, Notice, Modal } from "obsidian";
 import type ConlangPlugin from "./main";
-import { CypherSheet, CypherRule, HashType, LanguageConfig, InflectionRule } from "./types";
+import { ConlangSettings, CypherSheet, HashType, LanguageConfig } from "./types";
 import { INFLECTION_PRESETS, findPreset } from "./presets";
 
 export class ConlangSettingTab extends PluginSettingTab {
@@ -66,9 +66,8 @@ export class ConlangSettingTab extends PluginSettingTab {
 
       const cb = row.createEl("input", { type: "checkbox" });
       cb.checked = isActive;
-      cb.addEventListener("change", async () => {
-        await this.toggleActive(lang.name, cb.checked);
-        this.display();
+      cb.addEventListener("change", () => {
+        void this.toggleActive(lang.name, cb.checked).then(() => this.display());
       });
 
       const star = row.createSpan({
@@ -76,13 +75,15 @@ export class ConlangSettingTab extends PluginSettingTab {
         text: isPrimary ? "★" : "☆",
       });
       star.setAttribute("aria-label", "Set as primary language");
-      star.addEventListener("click", async () => {
-        if (!this.plugin.settings.activeLanguages.includes(lang.name)) {
-          await this.toggleActive(lang.name, true);
-        }
-        this.plugin.settings.primaryLanguage = lang.name;
-        await this.plugin.saveSettings();
-        this.display();
+      star.addEventListener("click", () => {
+        void (async () => {
+          if (!this.plugin.settings.activeLanguages.includes(lang.name)) {
+            await this.toggleActive(lang.name, true);
+          }
+          this.plugin.settings.primaryLanguage = lang.name;
+          await this.plugin.saveSettings();
+          this.display();
+        })();
       });
 
       const name = row.createSpan({ cls: "conlang-lang-overview-name", text: lang.name });
@@ -171,7 +172,8 @@ export class ConlangSettingTab extends PluginSettingTab {
         dd.addOption("ctrl", "Ctrl / Cmd");
         dd.setValue(this.plugin.settings.hoverModifier);
         dd.onChange(async (value) => {
-          this.plugin.settings.hoverModifier = value as any;
+          this.plugin.settings.hoverModifier =
+            value as ConlangSettings["hoverModifier"];
           await this.plugin.saveSettings();
         });
       });
@@ -187,7 +189,8 @@ export class ConlangSettingTab extends PluginSettingTab {
         dd.addOption("nothing", "Nothing");
         dd.setValue(this.plugin.settings.hoverFallback);
         dd.onChange(async (value) => {
-          this.plugin.settings.hoverFallback = value as any;
+          this.plugin.settings.hoverFallback =
+            value as ConlangSettings["hoverFallback"];
           await this.plugin.saveSettings();
         });
       });
@@ -221,7 +224,8 @@ export class ConlangSettingTab extends PluginSettingTab {
         dd.addOption("background", "Background highlight");
         dd.setValue(this.plugin.settings.highlightStyle);
         dd.onChange(async (value) => {
-          this.plugin.settings.highlightStyle = value as any;
+          this.plugin.settings.highlightStyle =
+            value as ConlangSettings["highlightStyle"];
           await this.plugin.saveSettings();
         });
       });
@@ -265,7 +269,8 @@ export class ConlangSettingTab extends PluginSettingTab {
         dd.addOption("wikilink", "Wikilink to dictionary entry");
         dd.setValue(this.plugin.settings.commitWrapper);
         dd.onChange(async (value) => {
-          this.plugin.settings.commitWrapper = value as any;
+          this.plugin.settings.commitWrapper =
+            value as ConlangSettings["commitWrapper"];
           await this.plugin.saveSettings();
         });
       });
@@ -393,7 +398,7 @@ export class ConlangSettingTab extends PluginSettingTab {
           .setButtonText("Remove language")
           .setWarning()
           .onClick(async () => {
-            this.removeLanguage(index, lang.name);
+            await this.removeLanguage(index, lang.name);
           })
       );
 
@@ -608,16 +613,16 @@ export class ConlangSettingTab extends PluginSettingTab {
 
     const inputTd = tr.createEl("td");
     const inputEl = inputTd.createEl("input", { type: "text", value: rule.input });
-    inputEl.addEventListener("change", async () => {
+    inputEl.addEventListener("change", () => {
       rule.input = inputEl.value;
-      await this.plugin.saveSettings();
+      void this.plugin.saveSettings();
     });
 
     const outputTd = tr.createEl("td");
     const outputEl = outputTd.createEl("input", { type: "text", value: rule.output });
-    outputEl.addEventListener("change", async () => {
+    outputEl.addEventListener("change", () => {
       rule.output = outputEl.value;
-      await this.plugin.saveSettings();
+      void this.plugin.saveSettings();
     });
 
     const typeTd = tr.createEl("td");
@@ -626,25 +631,24 @@ export class ConlangSettingTab extends PluginSettingTab {
       const opt = typeEl.createEl("option", { text: t, value: t });
       if (t === rule.type) opt.selected = true;
     });
-    typeEl.addEventListener("change", async () => {
+    typeEl.addEventListener("change", () => {
       rule.type = typeEl.value as HashType;
-      await this.plugin.saveSettings();
+      void this.plugin.saveSettings();
     });
 
     const enabledTd = tr.createEl("td");
     const enabledEl = enabledTd.createEl("input", { type: "checkbox" });
     enabledEl.checked = rule.enabled;
-    enabledEl.addEventListener("change", async () => {
+    enabledEl.addEventListener("change", () => {
       rule.enabled = enabledEl.checked;
-      await this.plugin.saveSettings();
+      void this.plugin.saveSettings();
     });
 
     const deleteTd = tr.createEl("td");
     const deleteBtn = deleteTd.createEl("button", { text: "×" });
-    deleteBtn.addEventListener("click", async () => {
+    deleteBtn.addEventListener("click", () => {
       sheet.rules.splice(ruleIndex, 1);
-      await this.plugin.saveSettings();
-      this.display();
+      void this.plugin.saveSettings().then(() => this.display());
     });
   }
 
@@ -670,9 +674,9 @@ export class ConlangSettingTab extends PluginSettingTab {
     const mkText = (value: string, onChange: (v: string) => void) => {
       const td = tr.createEl("td");
       const el = td.createEl("input", { type: "text", value });
-      el.addEventListener("change", async () => {
+      el.addEventListener("change", () => {
         onChange(el.value);
-        await this.plugin.saveSettings();
+        void this.plugin.saveSettings();
       });
     };
 
@@ -684,9 +688,9 @@ export class ConlangSettingTab extends PluginSettingTab {
       const opt = posEl.createEl("option", { text: p, value: p });
       if (p === rule.position) opt.selected = true;
     });
-    posEl.addEventListener("change", async () => {
+    posEl.addEventListener("change", () => {
       rule.position = posEl.value as "suffix" | "prefix";
-      await this.plugin.saveSettings();
+      void this.plugin.saveSettings();
     });
 
     mkText(rule.pattern, (v) => {
@@ -701,17 +705,16 @@ export class ConlangSettingTab extends PluginSettingTab {
     const enabledTd = tr.createEl("td");
     const enabledEl = enabledTd.createEl("input", { type: "checkbox" });
     enabledEl.checked = rule.enabled;
-    enabledEl.addEventListener("change", async () => {
+    enabledEl.addEventListener("change", () => {
       rule.enabled = enabledEl.checked;
-      await this.plugin.saveSettings();
+      void this.plugin.saveSettings();
     });
 
     const deleteTd = tr.createEl("td");
     const deleteBtn = deleteTd.createEl("button", { text: "×" });
-    deleteBtn.addEventListener("click", async () => {
+    deleteBtn.addEventListener("click", () => {
       rules.splice(ruleIndex, 1);
-      await this.plugin.saveSettings();
-      this.display();
+      void this.plugin.saveSettings().then(() => this.display());
     });
   }
 }

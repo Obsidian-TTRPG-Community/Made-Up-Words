@@ -127,11 +127,13 @@ export class LookupModal extends Modal {
 
   private wireOpenEntry(row: HTMLElement, entry: DictionaryEntry) {
     row.addClass("conlang-clickable");
-    row.addEventListener("click", async () => {
+    row.addEventListener("click", () => {
       const file = this.app.vault.getAbstractFileByPath(entry.path);
       if (file instanceof TFile) {
-        await this.app.workspace.getLeaf(false).openFile(file);
-        this.close();
+        void this.app.workspace
+          .getLeaf(false)
+          .openFile(file)
+          .then(() => this.close());
       }
     });
   }

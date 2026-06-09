@@ -62,7 +62,7 @@ export class WordCreationModal extends Modal {
     this.englishInput.addEventListener("input", () => {
       this.englishDefinition = this.englishInput.value;
     });
-    setTimeout(() => this.englishInput.focus(), 0);
+    window.setTimeout(() => this.englishInput.focus(), 0);
 
     contentEl.createEl("div", { cls: "conlang-modal-label", text: "Made-up word" });
     const conlangRow = contentEl.createDiv({ cls: "conlang-modal-derive-row" });

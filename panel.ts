@@ -116,7 +116,7 @@ export class TranslationPanelView extends ItemView {
     this.showActiveTab();
 
     // Update Translate tab on selection change
-    this.registerDomEvent(document, "selectionchange", () => {
+    this.registerDomEvent(activeDocument, "selectionchange", () => {
       this.scheduleTranslateUpdate();
     });
 
@@ -194,7 +194,7 @@ export class TranslationPanelView extends ItemView {
           : `${lang.name} is inactive. Click to activate.`;
         body.addEventListener("click", (e) => {
           e.stopPropagation();
-          this.toggleLanguageActive(lang.name);
+          void this.toggleLanguageActive(lang.name);
         });
 
         // The star: indicates primary, click to set primary
@@ -208,7 +208,7 @@ export class TranslationPanelView extends ItemView {
         if (isActive) {
           star.addEventListener("click", (e) => {
             e.stopPropagation();
-            this.setPrimaryLanguage(lang.name);
+            void this.setPrimaryLanguage(lang.name);
           });
         } else {
           star.addClass("is-disabled");
@@ -225,14 +225,14 @@ export class TranslationPanelView extends ItemView {
         cls: "conlang-panel-btn",
       });
       wordBtn.title = `Add a new word to ${primary.name} (the primary language). Click a star above to change the primary.`;
-      wordBtn.addEventListener("click", () => this.plugin.createWordFromPanel());
+      wordBtn.addEventListener("click", () => void this.plugin.createWordFromPanel());
 
       const nameBtn = actions.createEl("button", {
         text: "+ Name",
         cls: "conlang-panel-btn",
       });
       nameBtn.title = `Add a proper noun to ${primary.name}. Locked at creation so cypher changes don't affect it.`;
-      nameBtn.addEventListener("click", () => this.plugin.createName());
+      nameBtn.addEventListener("click", () => void this.plugin.createName());
     }
   }
 
@@ -596,10 +596,10 @@ export class TranslationPanelView extends ItemView {
 
     // Click the card to open the entry note
     card.addClass("conlang-clickable");
-    card.addEventListener("click", async () => {
+    card.addEventListener("click", () => {
       const file = this.plugin.app.vault.getAbstractFileByPath(entry.path);
       if (file instanceof TFile) {
-        await this.plugin.app.workspace.getLeaf(false).openFile(file);
+        void this.plugin.app.workspace.getLeaf(false).openFile(file);
       }
     });
 
@@ -691,10 +691,10 @@ export class TranslationPanelView extends ItemView {
         const sense = firstSense(entry.definition);
         meaningEl.setText(sense || entry.definition);
         chip.addClass("conlang-clickable");
-        chip.addEventListener("click", async () => {
+        chip.addEventListener("click", () => {
           const file = this.plugin.app.vault.getAbstractFileByPath(entry.path);
           if (file instanceof TFile) {
-            await this.plugin.app.workspace.getLeaf(false).openFile(file);
+            void this.plugin.app.workspace.getLeaf(false).openFile(file);
           }
         });
       } else {
@@ -759,7 +759,7 @@ export class TranslationPanelView extends ItemView {
       replaceBtn.disabled = !hasEditor;
       if (!hasEditor) replaceBtn.title = "Make a selection in an editor to enable.";
       replaceBtn.addEventListener("click", () => {
-        if (view) this.plugin.commitSelectionToConlang(view.editor);
+        if (view) void this.plugin.commitSelectionToConlang(view.editor);
       });
 
       const createBtn = this.actionsEl.createEl("button", {
@@ -769,7 +769,7 @@ export class TranslationPanelView extends ItemView {
       createBtn.title =
         "Create a dictionary entry mapping this English text to its cyphered form.";
       createBtn.addEventListener("click", () => {
-        this.plugin.createDictionaryEntryForText(text);
+        void this.plugin.createDictionaryEntryForText(text);
       });
     }
   }
@@ -832,10 +832,10 @@ export class TranslationPanelView extends ItemView {
     }
 
     card.addClass("conlang-clickable");
-    card.addEventListener("click", async () => {
+    card.addEventListener("click", () => {
       const file = this.plugin.app.vault.getAbstractFileByPath(entry.path);
       if (file instanceof TFile) {
-        await this.plugin.app.workspace.getLeaf(false).openFile(file);
+        void this.plugin.app.workspace.getLeaf(false).openFile(file);
       }
     });
   }
@@ -908,7 +908,7 @@ export class TranslationPanelView extends ItemView {
       cls: "conlang-translator-copy-btn",
     });
     this.translatorCopyBtn.title = "Copy the transliteration output to your clipboard. (Gloss mode is rich content and isn't copyable as plain text.)";
-    this.translatorCopyBtn.addEventListener("click", () => this.copyTranslation());
+    this.translatorCopyBtn.addEventListener("click", () => void this.copyTranslation());
 
     // Output area: either a gloss render (rich token list) or a flat string
     this.translatorOutputEl = this.translatorEl.createDiv({
@@ -1100,10 +1100,10 @@ export class TranslationPanelView extends ItemView {
     }
     meta.setText(parts.join(" · "));
     card.addClass("conlang-clickable");
-    card.addEventListener("click", async () => {
+    card.addEventListener("click", () => {
       const file = this.plugin.app.vault.getAbstractFileByPath(entry.path);
       if (file instanceof TFile) {
-        await this.plugin.app.workspace.getLeaf(false).openFile(file);
+        void this.plugin.app.workspace.getLeaf(false).openFile(file);
       }
     });
   }
@@ -1129,11 +1129,11 @@ export class TranslationPanelView extends ItemView {
       const def = row.createSpan({ cls: "conlang-gloss-candidate-def" });
       def.setText(entry.definition);
       row.addClass("conlang-clickable");
-      row.addEventListener("click", async (e) => {
+      row.addEventListener("click", (e) => {
         e.stopPropagation();
         const file = this.plugin.app.vault.getAbstractFileByPath(entry.path);
         if (file instanceof TFile) {
-          await this.plugin.app.workspace.getLeaf(false).openFile(file);
+          void this.plugin.app.workspace.getLeaf(false).openFile(file);
         }
       });
     }
@@ -1171,16 +1171,18 @@ export class TranslationPanelView extends ItemView {
             span.setText(`${sense || t.inflection.lemma.word}.${t.inflection.label.toUpperCase()}`);
           }
           break;
-        case "cypher-fallback":
+        case "cypher-fallback": {
           const cspan = container.createSpan({ cls: "conlang-translit-cypher" });
           cspan.setText(t.cypherOutput ?? t.source);
           cspan.title = "Cypher placeholder — no dictionary entry exists for this word.";
           break;
-        case "no-match":
+        }
+        case "no-match": {
           const nspan = container.createSpan({ cls: "conlang-translit-nomatch" });
           nspan.setText(t.source);
           nspan.title = "No dictionary entry and no cypher transformation. Original word unchanged.";
           break;
+        }
       }
     }
 
@@ -1229,7 +1231,7 @@ export class TranslationPanelView extends ItemView {
           this.translatorCopyBtn.setText(original);
           this.translatorCopyBtn.disabled = false;
         }, 1200);
-      } catch (e) {
+      } catch {
         // clipboard unavailable
       }
       return;
@@ -1245,7 +1247,7 @@ export class TranslationPanelView extends ItemView {
         this.translatorCopyBtn.setText(original);
         this.translatorCopyBtn.disabled = false;
       }, 1200);
-    } catch (e) {
+    } catch {
       // ignore
     }
   }
@@ -1535,10 +1537,10 @@ export class TranslationPanelView extends ItemView {
       ipa.setText(entry.ipa);
     }
 
-    row.addEventListener("click", async () => {
+    row.addEventListener("click", () => {
       const file = this.plugin.app.vault.getAbstractFileByPath(entry.path);
       if (file instanceof TFile) {
-        await this.plugin.app.workspace.getLeaf(false).openFile(file);
+        void this.plugin.app.workspace.getLeaf(false).openFile(file);
       }
     });
   }

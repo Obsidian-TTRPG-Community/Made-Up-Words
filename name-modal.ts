@@ -81,7 +81,7 @@ export class NameCreationModal extends Modal {
     this.conlangInput.addEventListener("input", () => {
       this.conlangForm = this.conlangInput.value;
     });
-    setTimeout(() => this.conlangInput.focus(), 0);
+    window.setTimeout(() => this.conlangInput.focus(), 0);
 
     // === Derive option ===
     const deriveBlock = contentEl.createDiv({ cls: "conlang-modal-derive" });

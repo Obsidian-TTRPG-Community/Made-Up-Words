@@ -2,6 +2,7 @@
 
 import {
   Editor,
+  EditorPosition,
   MarkdownView,
   Notice,
   Plugin,
@@ -107,7 +108,7 @@ export default class ConlangPlugin extends Plugin {
     // "book", "globe", "message-square", "type". The "languages" icon exists
     // in newer Lucide but isn't always bundled, so we avoid it.
     const ribbon = this.addRibbonIcon("book-open", "Open Made Up Words panel", () => {
-      this.openPanel();
+      void this.openPanel();
     });
     ribbon.addClass("conlang-ribbon-icon");
     console.log("[Made Up Words] plugin loaded, ribbon icon added");
@@ -196,7 +197,7 @@ export default class ConlangPlugin extends Plugin {
     );
 
     // Hover tooltip handler (throttled — see onMouseMove)
-    this.registerDomEvent(document, "mousemove", (evt) => {
+    this.registerDomEvent(activeDocument, "mousemove", (evt) => {
       this.onMouseMove(evt);
     });
   }
@@ -210,7 +211,7 @@ export default class ConlangPlugin extends Plugin {
     if (this.tooltipEl && this.tooltipEl.parentElement) {
       this.tooltipEl.parentElement.removeChild(this.tooltipEl);
     }
-    document.body.removeClass(
+    activeDocument.body.removeClass(
       "conlang-hl-underline",
       "conlang-hl-italic",
       "conlang-hl-background"
@@ -218,7 +219,8 @@ export default class ConlangPlugin extends Plugin {
   }
 
   async loadSettings() {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    const data = (await this.loadData()) as Partial<ConlangSettings> | null;
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, data);
     this.migrateSettings();
   }
 
@@ -282,7 +284,7 @@ export default class ConlangPlugin extends Plugin {
     // Mark as seen immediately so we don't double-show even if something
     // below throws.
     this.settings.hasSeenWelcome = true;
-    this.saveData(this.settings);
+    void this.saveData(this.settings);
 
     // Use a longer-than-default duration since we have meaningful content.
     // 12 seconds is enough to read without being intrusive.
@@ -376,13 +378,13 @@ export default class ConlangPlugin extends Plugin {
    * is off so no stray rules apply.
    */
   applyHighlightStyleClass() {
-    document.body.removeClass(
+    activeDocument.body.removeClass(
       "conlang-hl-underline",
       "conlang-hl-italic",
       "conlang-hl-background"
     );
     if (this.settings.highlightKnownWords) {
-      document.body.addClass(`conlang-hl-${this.settings.highlightStyle}`);
+      activeDocument.body.addClass(`conlang-hl-${this.settings.highlightStyle}`);
     }
   }
 
@@ -405,7 +407,7 @@ export default class ConlangPlugin extends Plugin {
       (l) => l.dictionaryFolder && path.startsWith(l.dictionaryFolder)
     );
     if (!inDict) return;
-    this.reloadActiveLanguage().then(() => {
+    void this.reloadActiveLanguage().then(() => {
       this.refreshPanel();
       this.refreshHighlights();
     });
@@ -427,20 +429,22 @@ export default class ConlangPlugin extends Plugin {
       if (!(view instanceof MarkdownView)) continue;
       // Secondary: nudge the live editor directly, in case updateOptions
       // didn't recreate the ViewPlugin for this pane.
-      const cm = (view.editor as any)?.cm as EditorView | undefined;
+      const cm = (view.editor as Editor & { cm?: EditorView }).cm;
       if (cm) {
         try {
           cm.dispatch({ effects: refreshHighlightEffect.of(null) });
-        } catch (e) {
+        } catch {
           /* non-fatal */
         }
       }
       // Re-render Reading-view panes so the markdown post-processor re-runs.
-      const preview = (view as any).previewMode;
+      const preview = (
+        view as MarkdownView & { previewMode?: { rerender?(full: boolean): void } }
+      ).previewMode;
       if (preview && typeof preview.rerender === "function") {
         try {
           preview.rerender(true);
-        } catch (e) {
+        } catch {
           /* non-fatal */
         }
       }
@@ -546,7 +550,9 @@ export default class ConlangPlugin extends Plugin {
     return out.join("");
   }
 
-  private getSelectionOrWord(editor: Editor): { text: string; from: any; to: any } | null {
+  private getSelectionOrWord(
+    editor: Editor
+  ): { text: string; from: EditorPosition; to: EditorPosition } | null {
     const text = editor.getSelection();
     if (text && text.length > 0) {
       return { text, from: editor.getCursor("from"), to: editor.getCursor("to") };
@@ -1095,7 +1101,7 @@ export default class ConlangPlugin extends Plugin {
       if (!exists) {
         try {
           await this.app.vault.createFolder(current);
-        } catch (e) {
+        } catch {
           // ignore concurrent creation
         }
       }
@@ -1355,7 +1361,15 @@ export default class ConlangPlugin extends Plugin {
     x: number,
     y: number
   ): { word: string; forwardContext: string; backwardContext: string } | null {
-    const doc: any = document;
+    // `caretPositionFromPoint` / `caretRangeFromPoint` are non-standard across
+    // browsers, so type just the two methods we probe for rather than using any.
+    const doc = activeDocument as Document & {
+      caretRangeFromPoint?(x: number, y: number): Range | null;
+      caretPositionFromPoint?(
+        x: number,
+        y: number
+      ): { offsetNode: Node; offset: number } | null;
+    };
     let textNode: Node | null = null;
     let offset = 0;
     if (typeof doc.caretRangeFromPoint === "function") {
@@ -1390,7 +1404,7 @@ export default class ConlangPlugin extends Plugin {
     if (!this.tooltipEl) {
       this.tooltipEl = document.createElement("div");
       this.tooltipEl.addClass("conlang-tooltip");
-      document.body.appendChild(this.tooltipEl);
+      activeDocument.body.appendChild(this.tooltipEl);
     }
     return this.tooltipEl;
   }

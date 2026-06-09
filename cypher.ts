@@ -103,9 +103,9 @@ function findBestMatch(
   const maxCheck = Math.min(indexed.maxLen, remaining);
 
   // Walk from longest to shortest length we have rules for
-  for (const { len, rules } of indexed.byLength) {
+  for (const { len } of indexed.byLength) {
     if (len > maxCheck) continue;
-    const segment = text.substr(index, len);
+    const segment = text.substring(index, index + len);
     const lower = segment.toLowerCase();
     const candidates = indexed.rulesByLowerInput.get(lower);
     if (!candidates) continue;

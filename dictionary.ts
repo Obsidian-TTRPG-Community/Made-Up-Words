@@ -15,7 +15,7 @@
 //
 // Body of the note can contain freeform usage notes; we include it as `notes`.
 
-import { App, TFile, TFolder, getAllTags, CachedMetadata } from "obsidian";
+import { App, TFile, TFolder, CachedMetadata } from "obsidian";
 import { DictionaryEntry } from "./types";
 import { extractBodyPreview as _extractBodyPreview } from "./body-preview";
 import { parseStringList } from "./word-tokens";
@@ -135,7 +135,7 @@ export class Dictionary {
         }
       }
     }
-    this.loadBodyPreviews(properNounEntries);
+    void this.loadBodyPreviews(properNounEntries);
     return count;
   }
 
@@ -150,7 +150,7 @@ export class Dictionary {
         try {
           const content = await this.app.vault.cachedRead(file);
           entry.bodyPreview = _extractBodyPreview(content);
-        } catch (e) {
+        } catch {
           // Non-fatal — body preview is optional enrichment
         }
       })
