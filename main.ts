@@ -1375,7 +1375,6 @@ export default class ConlangPlugin extends Plugin {
     // caretRangeFromPoint is marked deprecated but remains the most broadly
     // supported option on Chromium; caretPositionFromPoint is the standard
     // fallback. Intentionally probing both.
-    /* eslint-disable @typescript-eslint/no-deprecated */
     if (typeof doc.caretRangeFromPoint === "function") {
       const range: Range | null = doc.caretRangeFromPoint(x, y);
       if (!range) return null;
@@ -1387,7 +1386,6 @@ export default class ConlangPlugin extends Plugin {
       textNode = pos.offsetNode;
       offset = pos.offset;
     }
-    /* eslint-enable @typescript-eslint/no-deprecated */
     if (!textNode || textNode.nodeType !== Node.TEXT_NODE) return null;
     const text = textNode.textContent ?? "";
     if (!text) return null;
