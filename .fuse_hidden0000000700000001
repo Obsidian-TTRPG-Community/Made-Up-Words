@@ -1,0 +1,122 @@
+// Tests for known-word highlight resolution (highlightSpans / classifyWord).
+//
+// These exercise the pure span-resolution logic with a fake plugin/dictionary,
+// independent of CodeMirror and the DOM. Run alongside the other test-*.ts
+// files (e.g. `npx tsx test-highlight.ts`).
+
+import { highlightSpans, classifyWord, HighlightKind } from "./highlight-core";
+import { DictionaryEntry } from "./types";
+
+function expect(label: string, actual: any, expected: any) {
+  const ok = JSON.stringify(actual) === JSON.stringify(expected);
+  console.log(
+    `${ok ? "PASS" : "FAIL"}  ${label}${
+      ok ? "" : `\n  got:  ${JSON.stringify(actual)}\n  want: ${JSON.stringify(expected)}`
+    }`
+  );
+  if (!ok) process.exitCode = 1;
+}
+
+function mkEntry(word: string, definition: string, isPhrase = false): DictionaryEntry {
+  return {
+    word,
+    definition,
+    path: `fake/${word}.md`,
+    isPhrase,
+    wordCount: word.split(/\s+/).length,
+  };
+}
+
+// === Fake plugin / dictionary ===
+
+// "hfr" = cat (conlang headword); "good morning" = greeting (phrase).
+const headwords = new Map<string, DictionaryEntry[]>([
+  ["hfr", [mkEntry("HFR", "cat")]],
+]);
+const english = new Map<string, DictionaryEntry[]>([
+  ["cat", [mkEntry("HFR", "cat")]],
+]);
+const phrases = [mkEntry("good morning", "greeting", true)];
+
+function makePlugin(overrides: any = {}) {
+  return {
+    settings: {
+      highlightKnownWords: true,
+      highlightStyle: "underline",
+      highlightConlang: true,
+      highlightEnglish: true,
+      ...overrides,
+    },
+    dictionary: {
+      lookupAll: (w: string) => headwords.get(w.toLowerCase()) ?? [],
+      lookupEnglish: (w: string) => english.get(w.toLowerCase()) ?? [],
+      allPhrases: () => phrases,
+    },
+    getActiveLanguages: () => [{ inflections: [] }],
+  } as any;
+}
+
+// === Tests ===
+
+// 1. Conlang headword is classified "conlang", case-insensitively.
+expect("classify HFR -> conlang", classifyWord(makePlugin(), "hfr"), "conlang");
+expect("classify HfR (mixed case) -> conlang", classifyWord(makePlugin(), "HfR"), "conlang");
+
+// 2. English term with a translation is classified "english".
+expect("classify cat -> english", classifyWord(makePlugin(), "cat"), "english");
+
+// 3. Unknown word is null.
+expect("classify dog -> null", classifyWord(makePlugin(), "dog"), null);
+
+// 4. Direction toggles are respected.
+expect(
+  "english direction off -> cat null",
+  classifyWord(makePlugin({ highlightEnglish: false }), "cat"),
+  null
+);
+expect(
+  "conlang direction off -> hfr null",
+  classifyWord(makePlugin({ highlightConlang: false }), "hfr"),
+  null
+);
+
+// 5. highlightSpans finds the conlang word at the right offsets.
+{
+  const text = "The HFR sat down.";
+  const spans = highlightSpans(makePlugin(), text, 0);
+  const kinds = spans.map((s) => s.kind as HighlightKind);
+  // "HFR" at index 4..7; "cat"? none. ("sat","down","The" not in dict)
+  expect("HFR span kinds", kinds, ["conlang"]);
+  expect("HFR span slice", spans.map((s) => text.slice(s.from, s.to)), ["HFR"]);
+}
+
+// 6. highlightSpans tags an English match.
+{
+  const text = "I have a cat.";
+  const spans = highlightSpans(makePlugin(), text, 0);
+  expect("cat span", spans.map((s) => [text.slice(s.from, s.to), s.kind]), [["cat", "english"]]);
+}
+
+// 7. Phrases match as a single span with kind "phrase".
+{
+  const text = "say good morning now";
+  const spans = highlightSpans(makePlugin(), text, 0);
+  expect("phrase span", spans.map((s) => [text.slice(s.from, s.to), s.kind]), [
+    ["good morning", "phrase"],
+  ]);
+}
+
+// 8. baseOffset is added to all offsets (used to map onto a CM document).
+{
+  const text = "HFR";
+  const spans = highlightSpans(makePlugin(), text, 100);
+  expect("baseOffset applied", [spans[0].from, spans[0].to], [100, 103]);
+}
+
+// 9. Master switch off -> no spans.
+{
+  const spans = highlightSpans(makePlugin({ highlightKnownWords: false }), "HFR cat", 0);
+  expect("master off -> empty", spans, []);
+}
+
+console.log("\\nHighlight tests complete.");

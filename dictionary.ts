@@ -268,40 +268,54 @@ export class Dictionary {
   }
 
   /**
-   * Format an entry for display in a hover tooltip.
+   * Render an entry into a hover tooltip element using safe DOM construction.
+   * Inline parts are separated by spaces to match the previous layout.
    */
-  static formatTooltip(entry: DictionaryEntry): string {
-    const parts: string[] = [];
-    parts.push(`<strong>${escapeHtml(entry.word)}</strong>`);
+  static renderTooltip(entry: DictionaryEntry, parent: HTMLElement): void {
+    const sep = () => {
+      if (parent.childNodes.length > 0) parent.appendText(" ");
+    };
+    sep();
+    parent.createEl("strong", { text: entry.word });
     if (entry.aliases && entry.aliases.length > 0) {
-      parts.push(
-        `<span class="conlang-tooltip-aliases">(also: ${entry.aliases
-          .map(escapeHtml)
-          .join(", ")})</span>`
-      );
+      sep();
+      parent.createSpan({
+        cls: "conlang-tooltip-aliases",
+        text: `(also: ${entry.aliases.join(", ")})`,
+      });
     }
     if (entry.partOfSpeech) {
-      parts.push(`<em>${escapeHtml(entry.partOfSpeech)}</em>`);
+      sep();
+      parent.createEl("em", { text: entry.partOfSpeech });
     }
     if (entry.nameCategory) {
-      parts.push(`<span class="conlang-tooltip-category">${escapeHtml(entry.nameCategory)}</span>`);
+      sep();
+      parent.createSpan({
+        cls: "conlang-tooltip-category",
+        text: entry.nameCategory,
+      });
     }
     if (entry.ipa) {
-      parts.push(escapeHtml(entry.ipa));
+      sep();
+      parent.appendText(entry.ipa);
     }
-    parts.push(`<div class="conlang-tooltip-def">${escapeHtml(entry.definition)}</div>`);
+    sep();
+    parent.createDiv({ cls: "conlang-tooltip-def", text: entry.definition });
     // For proper nouns, include a richer description from the note body
     if (entry.bodyPreview) {
-      parts.push(
-        `<div class="conlang-tooltip-preview">${escapeHtml(entry.bodyPreview)}</div>`
-      );
+      sep();
+      parent.createDiv({
+        cls: "conlang-tooltip-preview",
+        text: entry.bodyPreview,
+      });
     }
     if (entry.etymology) {
-      parts.push(
-        `<div class="conlang-tooltip-etym">Etymology: ${escapeHtml(entry.etymology)}</div>`
-      );
+      sep();
+      parent.createDiv({
+        cls: "conlang-tooltip-etym",
+        text: `Etymology: ${entry.etymology}`,
+      });
     }
-    return parts.join(" ");
   }
 }
 
@@ -310,12 +324,3 @@ export class Dictionary {
  * Re-exported from body-preview module so callers can import either spot.
  */
 export { extractBodyPreview } from "./body-preview";
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}

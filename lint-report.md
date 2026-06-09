@@ -1,0 +1,93 @@
+## Releases
+
+- **Recommendation**: Missing GitHub artifact attestations for release assets
+  - main.js
+  - styles.css
+  - Artifact attestations let users cryptographically verify the provenance of the release assets, proving they were built from the source repository. https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations/using-artifact-attestations-to-establish-provenance-for-builds
+
+## Source code
+
+- **Error**: Sets styles directly instead of using CSS classes or `setCssProps`
+  - obsidianmd/no-static-styles-assignment
+  - lookup-modal.ts:129, main.ts:1405, main.ts:1422, main.ts:1469, main.ts:1487, main.ts:1517, panel.ts:310, panel.ts:311, panel.ts:312, panel.ts:313, panel.ts:318, panel.ts:320, panel.ts:322, panel.ts:377, panel.ts:378, panel.ts:382, panel.ts:383, panel.ts:596, panel.ts:691, panel.ts:832, panel.ts:1100, panel.ts:1129, panel.ts:1430, panel.ts:1431, panel.ts:1459, panel.ts:1460
+- **Error**: Uses Obsidian APIs newer than the declared `minAppVersion`
+  - obsidianmd/no-unsupported-api
+  - main.ts:342, main.ts:355
+- **Error**: Unsafe assignment to innerHTML
+  - main.ts:1404, main.ts:1417-1421, main.ts:1468, main.ts:1479-1486
+- **Error**: For a consistent UI use `new Setting(containerEl).setName(...).setHeading()` instead of creating HTML heading elements directly.
+  - settings.ts:32, settings.ts:39, settings.ts:54, settings.ts:160, settings.ts:198, settings.ts:257
+- **Warning**: 'rules' is assigned a value but never used.
+  - cypher.ts:106
+- **Warning**: `substr` is deprecated. A legacy feature for browser compatibility
+  - cypher.ts:108
+- **Warning**: 'getAllTags' is defined but never used.
+  - dictionary.ts:18
+- **Warning**: Promises must be awaited, end with a call to .catch, end with a call to .then with a rejection handler or be explicitly marked as ignored with the `void` operator.
+  - dictionary.ts:138, main.ts:110, main.ts:285, main.ts:342, main.ts:355, main.ts:408-411, panel.ts:197, panel.ts:211, panel.ts:760, panel.ts:770, settings.ts:397
+- **Warning**: 'e' is defined but never used.
+  - dictionary.ts:153, main.ts:434, main.ts:443, main.ts:1098, panel.ts:1230, panel.ts:1246
+- **Warning**: Unexpected any. Specify a different type.
+  - dictionary.ts:182, highlight.ts:46, main.ts:430, main.ts:439, main.ts:549, main.ts:549, main.ts:1358, settings.ts:175, settings.ts:191, settings.ts:225, settings.ts:269, test-aliases.ts:8, test-aliases.ts:8, test-gloss.ts:39, test-gloss.ts:51, test-gloss.ts:66, test-gloss.ts:77, test-gloss.ts:85, test-gloss.ts:98, test-gloss.ts:115, test-highlight.ts:10, test-highlight.ts:10, test-highlight.ts:41, test-highlight.ts:56, test-inflection.ts:45, test-inflection.ts:50, test-inflection.ts:55, test-inflection.ts:59, test-inflection.ts:64, test-inflection.ts:68, test-inflection.ts:75, test-inflection.ts:85, test-inflection.ts:94, test-inflection.ts:106, test-inflection.ts:130, test-inflection.ts:136, test-inflection.ts:146, test-inflection.ts:148, test-inflection.ts:154, test-inflection.ts:161, test-phrases.ts:16, test-phrases.ts:16, test-unicode.ts:51, test-unicode.ts:127, test-unicode.ts:163
+- **Warning**: Use 'window.setTimeout()' instead of 'setTimeout()' for popout window compatibility.
+  - entry-modal.ts:79, entry-modal.ts:219, name-modal.ts:84, panel.ts:324, word-modal.ts:65
+- **Warning**: Unsafe assignment of an `any` value.
+  - highlight.ts:48, highlight.ts:50, main.ts:221, main.ts:439, main.ts:1362, main.ts:1367, main.ts:1369, main.ts:1370, panel.ts:894, panel.ts:1319, settings.ts:175, settings.ts:191, settings.ts:225, settings.ts:269, test-highlight.ts:43-49
+- **Warning**: Unsafe member access .type on an `any` value.
+  - highlight.ts:48
+- **Warning**: Unsafe member access .parent on an `any` value.
+  - highlight.ts:50
+- **Warning**: Use 'activeDocument' instead of 'document' for popout window compatibility.
+  - highlight.ts:116, highlight.ts:147, highlight.ts:151, highlight.ts:153, highlight.ts:160, main.ts:199, main.ts:213, main.ts:379, main.ts:385, main.ts:1358, main.ts:1391, main.ts:1393, panel.ts:119
+- **Warning**: Promise returned in function argument where a void return was expected.
+  - lookup-modal.ts:130-136, panel.ts:228, panel.ts:235, panel.ts:597-602, panel.ts:692-697, panel.ts:833-838, panel.ts:909, panel.ts:1101-1106, panel.ts:1130-1136, panel.ts:1534-1539, settings.ts:70-73, settings.ts:80-87, settings.ts:612-615, settings.ts:619-622, settings.ts:630-633, settings.ts:638-641, settings.ts:645-649, settings.ts:674-677, settings.ts:688-691, settings.ts:705-708, settings.ts:712-716
+- **Warning**: Unsafe member access .cm on an `any` value.
+  - main.ts:430
+- **Warning**: Unsafe member access .previewMode on an `any` value.
+  - main.ts:439
+- **Warning**: Unsafe member access .rerender on an `any` value.
+  - main.ts:440, main.ts:442
+- **Warning**: Unsafe call of an `any` typed value.
+  - main.ts:442, main.ts:1362, main.ts:1367
+- **Warning**: Passes unsafe values into typed parameters
+  - @typescript-eslint/no-unsafe-argument
+  - main.ts:590, main.ts:590, test-gloss.ts:51, test-gloss.ts:66, test-gloss.ts:77, test-gloss.ts:85, test-gloss.ts:98, test-gloss.ts:115, test-highlight.ts:62, test-highlight.ts:63, test-highlight.ts:66, test-highlight.ts:69, test-highlight.ts:74, test-highlight.ts:79, test-highlight.ts:86, test-highlight.ts:96, test-highlight.ts:103, test-highlight.ts:112, test-highlight.ts:118, test-inflection.ts:45, test-inflection.ts:50, test-inflection.ts:55, test-inflection.ts:59, test-inflection.ts:64, test-inflection.ts:68, test-inflection.ts:75, test-inflection.ts:85, test-inflection.ts:94, test-inflection.ts:106, test-inflection.ts:130, test-inflection.ts:136, test-inflection.ts:146, test-inflection.ts:148, test-inflection.ts:154, test-inflection.ts:161, test-unicode.ts:127, test-unicode.ts:163
+- **Warning**: Unsafe member access .caretRangeFromPoint on an `any` value.
+  - main.ts:1361, main.ts:1362
+- **Warning**: Unsafe member access .caretPositionFromPoint on an `any` value.
+  - main.ts:1366, main.ts:1367
+- **Warning**: Unsafe member access .offsetNode on an `any` value.
+  - main.ts:1369
+- **Warning**: Unsafe member access .offset on an `any` value.
+  - main.ts:1370
+- **Warning**: Do not write to DOM directly using innerHTML/outerHTML property
+  - main.ts:1404, main.ts:1417-1421, main.ts:1468, main.ts:1479-1486
+- **Warning**: Unexpected lexical declaration in case block.
+  - panel.ts:1173, panel.ts:1178
+- **Warning**: 'CypherRule' is defined but never used.
+  - settings.ts:12
+- **Warning**: 'InflectionRule' is defined but never used.
+  - settings.ts:12
+- **Warning**: `display` is deprecated. Since 1.13.0. Use {@link getSettingDefinitions } instead.
+  - settings.ts:72, settings.ts:86, settings.ts:116, settings.ts:208, settings.ts:352, settings.ts:364, settings.ts:429, settings.ts:482, settings.ts:501, settings.ts:531, settings.ts:577, settings.ts:601, settings.ts:648, settings.ts:715
+- **Warning**: `setWarning` is deprecated. Use {@link setDestructive} for a destructive button, or
+`setDestructive().setCta()` for a destructive primary action.
+  - settings.ts:395
+- **Warning**: 'GlossToken' is defined but never used.
+  - test-gloss.ts:3
+- **Warning**: Returns unsafe values from typed code
+  - @typescript-eslint/no-unsafe-return
+  - test-highlight.ts:42-56
+- **Warning**: This assertion is unnecessary since it does not change the type of the expression.
+  - test-highlight.ts:87
+- **Warning**: 'Dictionary' is defined but never used.
+  - test-inflection.ts:4
+- **Warning**: 'MatchedToken' is defined but never used.
+  - test-phrases.ts:3
+- **Warning**: 'd' is assigned a value but never used.
+  - test-unicode.ts:172
+
+## CSS lint
+
+- **Warning**: Unexpected browser feature "text-decoration" is only partially supported by Obsidian 1.4.5
+  - styles.css:292, styles.css:293, styles.css:294, styles.css:1292, styles.css:1293, styles.css:1294, styles.css:1339, styles.css:1340, styles.css:1341, styles.css:1346, styles.css:1347, styles.css:1348, styles.css:1376

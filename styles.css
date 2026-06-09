@@ -573,7 +573,6 @@
   font-size: 0.9em;
   padding: 24px 12px;
   text-align: center;
-  display: none;
 }
 
 .conlang-empty-headline {
@@ -651,6 +650,19 @@
   line-height: 1.4;
   pointer-events: none;
   display: none;
+}
+
+.conlang-tooltip.conlang-tooltip-visible {
+  display: block;
+}
+
+/* Utility classes used in place of direct inline style assignments. */
+.conlang-hidden {
+  display: none !important;
+}
+
+.conlang-clickable {
+  cursor: pointer;
 }
 
 .conlang-tooltip strong {
@@ -742,10 +754,6 @@
   font-size: 0.9em;
   padding: 16px 4px;
   text-align: center;
-}
-
-.conlang-panel-body {
-  display: none;
 }
 
 .conlang-panel-block {

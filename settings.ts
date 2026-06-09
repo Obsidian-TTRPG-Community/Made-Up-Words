@@ -29,14 +29,14 @@ export class ConlangSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
     containerEl.addClass("conlang-settings");
-    containerEl.createEl("h2", { text: "Made Up Words" });
+    new Setting(containerEl).setName("Made Up Words").setHeading();
 
     this.renderLanguageOverview(containerEl);
     this.renderHoverSection(containerEl);
     this.renderHighlightSection(containerEl);
     this.renderTranslationSection(containerEl);
 
-    containerEl.createEl("h3", { text: "Per-language settings" });
+    new Setting(containerEl).setName("Per-language settings").setHeading();
     containerEl.createEl("p", {
       cls: "conlang-help",
       text:
@@ -51,7 +51,7 @@ export class ConlangSettingTab extends PluginSettingTab {
   // ===== Top overview =====
 
   private renderLanguageOverview(containerEl: HTMLElement): void {
-    containerEl.createEl("h3", { text: "Languages" });
+    new Setting(containerEl).setName("Languages").setHeading();
     new Setting(containerEl)
       .setName("Active languages")
       .setDesc(
@@ -157,7 +157,7 @@ export class ConlangSettingTab extends PluginSettingTab {
   // ===== Behaviour sections =====
 
   private renderHoverSection(containerEl: HTMLElement): void {
-    containerEl.createEl("h3", { text: "Hover tooltips" });
+    new Setting(containerEl).setName("Hover tooltips").setHeading();
     new Setting(containerEl)
       .setName("Hover modifier key")
       .setDesc(
@@ -195,7 +195,7 @@ export class ConlangSettingTab extends PluginSettingTab {
   }
 
   private renderHighlightSection(containerEl: HTMLElement): void {
-    containerEl.createEl("h3", { text: "Highlighting" });
+    new Setting(containerEl).setName("Highlighting").setHeading();
     new Setting(containerEl)
       .setName("Highlight known words in notes")
       .setDesc(
@@ -254,7 +254,7 @@ export class ConlangSettingTab extends PluginSettingTab {
   }
 
   private renderTranslationSection(containerEl: HTMLElement): void {
-    containerEl.createEl("h3", { text: "Translation" });
+    new Setting(containerEl).setName("Translation").setHeading();
     new Setting(containerEl)
       .setName("Commit wrapper")
       .setDesc(

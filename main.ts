@@ -339,7 +339,7 @@ export default class ConlangPlugin extends Plugin {
     try {
       const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_PANEL);
       if (existing.length > 0) {
-        this.app.workspace.revealLeaf(existing[0]);
+        await this.app.workspace.revealLeaf(existing[0]);
         return;
       }
       let leaf = this.app.workspace.getRightLeaf(false);
@@ -352,7 +352,7 @@ export default class ConlangPlugin extends Plugin {
         return;
       }
       await leaf.setViewState({ type: VIEW_TYPE_PANEL, active: true });
-      this.app.workspace.revealLeaf(leaf);
+      await this.app.workspace.revealLeaf(leaf);
     } catch (e) {
       console.error("[Conlang] openPanel failed:", e);
       new Notice("Made Up Words: failed to open panel — see developer console");
@@ -1189,7 +1189,7 @@ export default class ConlangPlugin extends Plugin {
     if (
       cleaned === this.lastHoverWord &&
       this.tooltipEl &&
-      this.tooltipEl.style.display !== "none"
+      this.tooltipEl.hasClass("conlang-tooltip-visible")
     ) {
       this.positionTooltip(evt.clientX, evt.clientY);
       return;
@@ -1401,8 +1401,9 @@ export default class ConlangPlugin extends Plugin {
       this.tooltipHideTimer = null;
     }
     const el = this.ensureTooltipEl();
-    el.innerHTML = Dictionary.formatTooltip(entry);
-    el.style.display = "block";
+    el.empty();
+    Dictionary.renderTooltip(entry, el);
+    el.addClass("conlang-tooltip-visible");
     this.positionTooltip(x, y);
   }
 
@@ -1412,14 +1413,15 @@ export default class ConlangPlugin extends Plugin {
       this.tooltipHideTimer = null;
     }
     const el = this.ensureTooltipEl();
+    el.empty();
     // Render the dictionary entry as normal, then add a banner line noting
     // that this is an inflected form.
-    el.innerHTML =
-      Dictionary.formatTooltip(match.lemma) +
-      `<div class="conlang-tooltip-inflection">` +
-      `${escapeHtml(match.inflectedForm)} = ${escapeHtml(match.rule.label)} of ${escapeHtml(match.lemma.word)}` +
-      `</div>`;
-    el.style.display = "block";
+    Dictionary.renderTooltip(match.lemma, el);
+    el.createDiv({
+      cls: "conlang-tooltip-inflection",
+      text: `${match.inflectedForm} = ${match.rule.label} of ${match.lemma.word}`,
+    });
+    el.addClass("conlang-tooltip-visible");
     this.positionTooltip(x, y);
   }
 
@@ -1439,34 +1441,36 @@ export default class ConlangPlugin extends Plugin {
       this.tooltipHideTimer = null;
     }
     const el = this.ensureTooltipEl();
-    const parts: string[] = [];
+    el.empty();
     // Header changes depending on whether matches come from multiple languages.
     const languages = new Set(entries.map((e) => e.language).filter(Boolean));
     const headerSummary =
       languages.size > 1
         ? `${entries.length} matches across ${languages.size} languages`
         : `${entries.length} senses`;
-    parts.push(
-      `<div class="conlang-tooltip-multisense-header"><strong>${escapeHtml(sourceWord)}</strong> — ${headerSummary}</div>`
-    );
+    const header = el.createDiv({ cls: "conlang-tooltip-multisense-header" });
+    header.createEl("strong", { text: sourceWord });
+    header.appendText(` — ${headerSummary}`);
     for (const entry of entries) {
-      const senseParts: string[] = [];
-      senseParts.push(`<strong>${escapeHtml(entry.word)}</strong>`);
+      const sense = el.createDiv({ cls: "conlang-tooltip-sense" });
+      sense.createEl("strong", { text: entry.word });
       // Show source language when there are multiple languages in play.
       // Hidden when all entries are from the same language to avoid noise.
       if (languages.size > 1 && entry.language) {
-        senseParts.push(
-          `<span class="conlang-tooltip-lang">${escapeHtml(entry.language)}</span>`
-        );
+        sense.appendText(" ");
+        sense.createSpan({ cls: "conlang-tooltip-lang", text: entry.language });
       }
       if (entry.partOfSpeech) {
-        senseParts.push(`<em>${escapeHtml(entry.partOfSpeech)}</em>`);
+        sense.appendText(" ");
+        sense.createEl("em", { text: entry.partOfSpeech });
       }
-      senseParts.push(`<span class="conlang-tooltip-sense-def">${escapeHtml(entry.definition)}</span>`);
-      parts.push(`<div class="conlang-tooltip-sense">${senseParts.join(" ")}</div>`);
+      sense.appendText(" ");
+      sense.createSpan({
+        cls: "conlang-tooltip-sense-def",
+        text: entry.definition,
+      });
     }
-    el.innerHTML = parts.join("");
-    el.style.display = "block";
+    el.addClass("conlang-tooltip-visible");
     this.positionTooltip(x, y);
   }
 
@@ -1476,15 +1480,16 @@ export default class ConlangPlugin extends Plugin {
       this.tooltipHideTimer = null;
     }
     const el = this.ensureTooltipEl();
-    el.innerHTML = `
-      <div class="conlang-tooltip-cypher">
-        <span class="conlang-tooltip-original">${escapeHtml(original)}</span>
-        <span class="conlang-tooltip-arrow-inline">→</span>
-        <span class="conlang-tooltip-translation">${escapeHtml(translated)}</span>
-      </div>
-      <div class="conlang-tooltip-hint">cypher only — not in dictionary</div>
-    `;
-    el.style.display = "block";
+    el.empty();
+    const cypher = el.createDiv({ cls: "conlang-tooltip-cypher" });
+    cypher.createSpan({ cls: "conlang-tooltip-original", text: original });
+    cypher.createSpan({ cls: "conlang-tooltip-arrow-inline", text: "→" });
+    cypher.createSpan({ cls: "conlang-tooltip-translation", text: translated });
+    el.createDiv({
+      cls: "conlang-tooltip-hint",
+      text: "cypher only — not in dictionary",
+    });
+    el.addClass("conlang-tooltip-visible");
     this.positionTooltip(x, y);
   }
 
@@ -1514,16 +1519,7 @@ export default class ConlangPlugin extends Plugin {
 
   private hideTooltip() {
     if (this.tooltipEl) {
-      this.tooltipEl.style.display = "none";
+      this.tooltipEl.removeClass("conlang-tooltip-visible");
     }
   }
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
 }

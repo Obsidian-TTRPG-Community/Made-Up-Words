@@ -126,7 +126,7 @@ export class LookupModal extends Modal {
   }
 
   private wireOpenEntry(row: HTMLElement, entry: DictionaryEntry) {
-    row.style.cursor = "pointer";
+    row.addClass("conlang-clickable");
     row.addEventListener("click", async () => {
       const file = this.app.vault.getAbstractFileByPath(entry.path);
       if (file instanceof TFile) {

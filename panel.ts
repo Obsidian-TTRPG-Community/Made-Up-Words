@@ -307,21 +307,21 @@ export class TranslationPanelView extends ItemView {
   }
 
   private showActiveTab() {
-    this.translateEmptyEl.style.display = "none";
-    this.translateBodyEl.style.display = "none";
-    this.browserEl.style.display = "none";
-    this.translatorEl.style.display = "none";
+    this.translateEmptyEl.addClass("conlang-hidden");
+    this.translateBodyEl.addClass("conlang-hidden");
+    this.browserEl.addClass("conlang-hidden");
+    this.translatorEl.addClass("conlang-hidden");
 
     if (this.activeTab === "translate") {
       // The updateTranslate method decides between empty and body visibility
       // based on whether there's a selection. Default to empty until it runs.
-      this.translateEmptyEl.style.display = "block";
+      this.translateEmptyEl.removeClass("conlang-hidden");
     } else if (this.activeTab === "dictionary") {
-      this.browserEl.style.display = "block";
+      this.browserEl.removeClass("conlang-hidden");
     } else if (this.activeTab === "translator") {
-      this.translatorEl.style.display = "block";
+      this.translatorEl.removeClass("conlang-hidden");
       // Focus the input so the user can start typing immediately
-      setTimeout(() => this.translatorInputEl?.focus(), 0);
+      window.setTimeout(() => this.translatorInputEl?.focus(), 0);
     }
   }
 
@@ -338,7 +338,9 @@ export class TranslationPanelView extends ItemView {
       "This tab updates automatically as you select text. Select English to see how it translates, or select a conlang word to see its dictionary entry. For free-form typing, use the Translator tab instead."
     );
 
-    this.translateBodyEl = this.tabContentEl.createDiv({ cls: "conlang-panel-body" });
+    this.translateBodyEl = this.tabContentEl.createDiv({
+      cls: "conlang-panel-body conlang-hidden",
+    });
 
     const translationBlock = this.translateBodyEl.createDiv({ cls: "conlang-panel-block" });
     this.sourceLabel = translationBlock.createDiv({ cls: "conlang-panel-label" });
@@ -374,13 +376,13 @@ export class TranslationPanelView extends ItemView {
     this.lastRenderedText = text;
 
     if (!text || text.trim().length === 0) {
-      this.translateBodyEl.style.display = "none";
-      this.translateEmptyEl.style.display = "block";
+      this.translateBodyEl.addClass("conlang-hidden");
+      this.translateEmptyEl.removeClass("conlang-hidden");
       return;
     }
 
-    this.translateEmptyEl.style.display = "none";
-    this.translateBodyEl.style.display = "block";
+    this.translateEmptyEl.addClass("conlang-hidden");
+    this.translateBodyEl.removeClass("conlang-hidden");
 
     // If the selection is a single word AND that word resolves to a dictionary
     // entry (directly or via inflection), render the "word details" view
@@ -593,7 +595,7 @@ export class TranslationPanelView extends ItemView {
     }
 
     // Click the card to open the entry note
-    card.style.cursor = "pointer";
+    card.addClass("conlang-clickable");
     card.addEventListener("click", async () => {
       const file = this.plugin.app.vault.getAbstractFileByPath(entry.path);
       if (file instanceof TFile) {
@@ -688,7 +690,7 @@ export class TranslationPanelView extends ItemView {
         const meaningEl = chip.createSpan({ cls: "conlang-part-meaning" });
         const sense = firstSense(entry.definition);
         meaningEl.setText(sense || entry.definition);
-        chip.style.cursor = "pointer";
+        chip.addClass("conlang-clickable");
         chip.addEventListener("click", async () => {
           const file = this.plugin.app.vault.getAbstractFileByPath(entry.path);
           if (file instanceof TFile) {
@@ -829,7 +831,7 @@ export class TranslationPanelView extends ItemView {
       etym.setText(`Etymology: ${entry.etymology}`);
     }
 
-    card.style.cursor = "pointer";
+    card.addClass("conlang-clickable");
     card.addEventListener("click", async () => {
       const file = this.plugin.app.vault.getAbstractFileByPath(entry.path);
       if (file instanceof TFile) {
@@ -1097,7 +1099,7 @@ export class TranslationPanelView extends ItemView {
       parts.push(`"${sense}"`);
     }
     meta.setText(parts.join(" · "));
-    card.style.cursor = "pointer";
+    card.addClass("conlang-clickable");
     card.addEventListener("click", async () => {
       const file = this.plugin.app.vault.getAbstractFileByPath(entry.path);
       if (file instanceof TFile) {
@@ -1126,7 +1128,7 @@ export class TranslationPanelView extends ItemView {
       }
       const def = row.createSpan({ cls: "conlang-gloss-candidate-def" });
       def.setText(entry.definition);
-      row.style.cursor = "pointer";
+      row.addClass("conlang-clickable");
       row.addEventListener("click", async (e) => {
         e.stopPropagation();
         const file = this.plugin.app.vault.getAbstractFileByPath(entry.path);
@@ -1347,7 +1349,9 @@ export class TranslationPanelView extends ItemView {
     // List + empty state. The text gets swapped depending on whether the
     // dictionary is genuinely empty or just hidden by filters.
     this.browserListEl = this.browserEl.createDiv({ cls: "conlang-browser-list" });
-    this.browserEmptyEl = this.browserEl.createDiv({ cls: "conlang-browser-empty" });
+    this.browserEmptyEl = this.browserEl.createDiv({
+      cls: "conlang-browser-empty conlang-hidden",
+    });
   }
 
   private renderBrowser() {
@@ -1427,8 +1431,8 @@ export class TranslationPanelView extends ItemView {
     this.renderStats(all, filtered);
 
     if (filtered.length === 0) {
-      this.browserListEl.style.display = "none";
-      this.browserEmptyEl.style.display = "block";
+      this.browserListEl.addClass("conlang-hidden");
+      this.browserEmptyEl.removeClass("conlang-hidden");
       this.browserEmptyEl.empty();
       if (all.length > 0) {
         // Entries exist but filters hide them all
@@ -1456,8 +1460,8 @@ export class TranslationPanelView extends ItemView {
       }
       return;
     }
-    this.browserListEl.style.display = "block";
-    this.browserEmptyEl.style.display = "none";
+    this.browserListEl.removeClass("conlang-hidden");
+    this.browserEmptyEl.addClass("conlang-hidden");
 
     for (const entry of filtered) {
       this.renderBrowserRow(entry);
