@@ -6,6 +6,59 @@ This project is pre-1.0. Expect rough edges and occasional breaking changes to
 settings or data formats. Where a change affects existing data, migration is
 handled automatically on load.
 
+## [0.18.0] - Reordering, quick word-adding, case-sensitivity & clickable words
+
+_Resolves [#4](https://github.com/Obsidian-TTRPG-Community/Made-Up-Words/issues/4),
+[#5](https://github.com/Obsidian-TTRPG-Community/Made-Up-Words/issues/5),
+[#6](https://github.com/Obsidian-TTRPG-Community/Made-Up-Words/issues/6),
+[#8](https://github.com/Obsidian-TTRPG-Community/Made-Up-Words/issues/8), and
+[#9](https://github.com/Obsidian-TTRPG-Community/Made-Up-Words/issues/9)._
+
+### Added
+- **Reorder inflection rules and cypher sheets.** Each inflection rule now has
+  up/down controls in a leftmost "Order" column, and each cypher sheet has
+  up/down arrows in its header. Order is significant — inflection rules are tried
+  top-to-bottom (first match wins) and cypher sheets run in sequence — so being
+  able to reorder without deleting and re-creating matters. Reordering updates
+  in place without resetting the settings scroll position. ([#9])
+- **"Add a word" command.** A new command opens the add-a-word dialog for the
+  active/primary language, so it can be given a hotkey — mirroring the existing
+  "Add a name" command. Handy when migrating a large dictionary into Obsidian.
+  ([#8])
+- **Case-sensitive matching (optional).** A new *Word matching → Case-sensitive
+  matching* toggle makes conlang-word lookups (headwords, aliases, and phrase
+  matching) distinguish case, so a proper noun like `Sol` and a common noun
+  `sol` can be separate entries. English-side lookups stay case-insensitive.
+  Off by default; changing it reloads the dictionary. ([#5])
+- **Click a recognised word to open its entry.** Highlighted conlang words are
+  now clickable and open their dictionary note — in both Reading view and Live
+  Preview (Ctrl/Cmd-click opens it in a new tab). Inflected forms open their
+  lemma's note; English matches open the first translation. ([#6])
+
+### Fixed
+- **Highlighting is visible again under more themes.** Under themes that don't
+  define `--text-accent` at `:root` (e.g. ITS Theme), the highlight colour
+  variable resolved to an invalid value, which silently dropped the whole
+  underline/colour rule — so recognised words showed no highlight. Highlights
+  now use Obsidian's theme variables directly (with fallbacks) and are applied
+  as inline styles, and the underline is drawn with a bottom border so it also
+  shows in Live Preview, where CodeMirror suppresses `text-decoration`.
+- **Note headings stay out of hover tooltips.** The body-preview shown for
+  proper nouns already skipped `#` headings; it now also skips setext-style
+  headings (a line underlined with `===` or `---`), so heading text never leaks
+  into a definition tooltip. ([#4])
+
+### Performance
+- Phrase matching now uses a first-word index, word classification is cached,
+  dictionary reloads are debounced, and the side panel caps very large result
+  lists — keeping highlighting and browsing responsive on large dictionaries.
+
+[#4]: https://github.com/Obsidian-TTRPG-Community/Made-Up-Words/issues/4
+[#5]: https://github.com/Obsidian-TTRPG-Community/Made-Up-Words/issues/5
+[#6]: https://github.com/Obsidian-TTRPG-Community/Made-Up-Words/issues/6
+[#8]: https://github.com/Obsidian-TTRPG-Community/Made-Up-Words/issues/8
+[#9]: https://github.com/Obsidian-TTRPG-Community/Made-Up-Words/issues/9
+
 ## [0.17.0] - Aliases & per-language word adding
 
 _Resolves [#2](https://github.com/Obsidian-TTRPG-Community/Made-Up-Words/issues/2)._

@@ -830,6 +830,13 @@
   background: var(--interactive-accent-hover);
 }
 
+/* "Show more" pager at the bottom of the dictionary browser list */
+.conlang-browser-show-more {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+}
+
 .conlang-panel-entries {
   margin-top: 16px;
 }
@@ -933,6 +940,37 @@
 
 .conlang-rules-table select {
   width: 100%;
+}
+
+/* Up/down reorder buttons on inflection rows (order is significant) */
+.conlang-reorder {
+  display: flex;
+  gap: 2px;
+}
+
+.conlang-reorder-btn {
+  padding: 0 6px;
+  line-height: 1.4;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.conlang-reorder-btn:hover:not(:disabled) {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover);
+}
+
+.conlang-reorder-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+/* Recognised words that resolve to an entry note are clickable */
+.conlang-known-word.conlang-clickable {
+  cursor: pointer;
 }
 
 .conlang-help {
@@ -1331,22 +1369,28 @@
    Override any of these in a theme or CSS snippet to recolour or restyle.
    Custom properties make the common case (just change the colour) a one-liner.
 */
-:root {
-  --conlang-known-color: var(--text-accent);
-  --conlang-known-english-color: var(--text-muted);
-  --conlang-known-bg: hsla(var(--accent-h), var(--accent-s), var(--accent-l), 0.30);
-  --conlang-known-english-bg: var(--background-modifier-hover);
+/* Defined on `body` (not :root) and with literal fallbacks so they resolve
+   even under themes that only define --text-accent etc. at the body/theme
+   level — e.g. ITS Theme, where a :root reference to --text-accent computes to
+   an invalid value and silently breaks every rule that uses it. */
+body {
+  --conlang-known-color: var(--text-accent, #a882ff);
+  --conlang-known-english-color: var(--text-muted, #9aa0a6);
+  --conlang-known-bg: var(--text-selection, hsla(258, 88%, 68%, 0.28));
+  --conlang-known-english-bg: var(--background-modifier-hover, rgba(255, 255, 255, 0.08));
 }
 
-/* Underline style (default) */
+/* Underline style (default).
+   Drawn with `border-bottom` rather than `text-decoration`: the CodeMirror
+   editor used in Live Preview suppresses text-decoration on its inline spans,
+   so the underline was invisible there (it worked in Reading view). A bottom
+   border renders reliably in both. */
 body.conlang-hl-underline .conlang-known-word.is-conlang {
-  text-decoration: underline dotted var(--conlang-known-color);
-  text-underline-offset: 2px;
+  border-bottom: 1px dotted var(--conlang-known-color);
   color: var(--conlang-known-color);
 }
 body.conlang-hl-underline .conlang-known-word.is-english {
-  text-decoration: underline dotted var(--conlang-known-english-color);
-  text-underline-offset: 2px;
+  border-bottom: 1px dotted var(--conlang-known-english-color);
 }
 
 /* Italic style */
@@ -1373,7 +1417,7 @@ body.conlang-hl-background .conlang-known-word.is-english {
 /* Phrases: a touch heavier so multi-word entries stand out from single words.
    Applies on top of whichever style variant is active. */
 body.conlang-hl-underline .conlang-known-word.is-phrase {
-  text-decoration-style: solid;
+  border-bottom-style: solid;
 }
 body.conlang-hl-background .conlang-known-word.is-phrase {
   font-weight: 600;

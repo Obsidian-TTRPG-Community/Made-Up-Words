@@ -9,6 +9,7 @@ import {
   TFile,
   TFolder,
   WorkspaceLeaf,
+  debounce,
 } from "obsidian";
 import {
   ConlangSettings,
@@ -19,7 +20,7 @@ import {
 import { applyCypher, applyCypherReverse } from "./cypher";
 import { Dictionary } from "./dictionary";
 import { findInflection, InflectionMatch } from "./inflection";
-import { matchPhraseAtStart } from "./phrases";
+import { matchPhraseAtStart, PhraseIndex } from "./phrases";
 import { WORD_RE, cleanWord, isWordChar, applyCasing } from "./word-tokens";
 import { ConlangSettingTab } from "./settings";
 import { TranslationPanelView, VIEW_TYPE_PANEL } from "./panel";
@@ -37,12 +38,18 @@ import {
   makeHighlightExtension,
   highlightElement,
   refreshHighlightEffect,
+  registerEntryLinkHandler,
 } from "./highlight";
+import type { HighlightKind } from "./highlight-core";
 import { EditorView } from "@codemirror/view";
 
 export default class ConlangPlugin extends Plugin {
   settings: ConlangSettings = DEFAULT_SETTINGS;
   dictionary: Dictionary = new Dictionary(this.app);
+  // Memoized word-classification results for the highlighter (see
+  // highlight-core.ts). Cleared whenever the dictionary reloads or settings
+  // change, since either can alter what a word resolves to.
+  readonly classifyCache: Map<string, HighlightKind | null> = new Map();
 
   private tooltipEl: HTMLDivElement | null = null;
   private tooltipHideTimer: number | null = null;
@@ -76,6 +83,9 @@ export default class ConlangPlugin extends Plugin {
     // live dictionary, so they stay in sync as entries change.
     this.registerEditorExtension(makeHighlightExtension(this));
     this.registerMarkdownPostProcessor((el) => highlightElement(this, el));
+    // One delegated click handler opens an entry note when its highlighted word
+    // is clicked, in both Reading view and Live Preview.
+    registerEntryLinkHandler(this);
     this.applyHighlightStyleClass();
 
     this.registerEvent(
@@ -161,6 +171,12 @@ export default class ConlangPlugin extends Plugin {
     });
 
     this.addCommand({
+      id: "create-word",
+      name: "Add a word",
+      callback: () => this.createWordFromPanel(),
+    });
+
+    this.addCommand({
       id: "lookup-word",
       name: "Look up word (all senses)",
       editorCallback: (editor: Editor) => this.lookupWord(editor),
@@ -203,6 +219,7 @@ export default class ConlangPlugin extends Plugin {
   }
 
   onunload() {
+    this.scheduleDictionaryReload.cancel();
     this.hideTooltip();
     if (this.hoverPendingTimer !== null) {
       window.clearTimeout(this.hoverPendingTimer);
@@ -326,13 +343,19 @@ export default class ConlangPlugin extends Plugin {
     // into the single Dictionary index. Each entry carries its `language`
     // field so callers can distinguish source.
     const active = this.getActiveLanguages();
+    // Index case mode is a load-time decision — set it before (re)loading.
+    this.dictionary.setCaseSensitive(this.settings.caseSensitiveMatching);
     if (active.length === 0) {
       this.dictionary.clear();
+      this.classifyCache.clear();
       return 0;
     }
-    return await this.dictionary.loadFromFolders(
+    const count = await this.dictionary.loadFromFolders(
       active.map((l) => ({ folder: l.dictionaryFolder, language: l.name }))
     );
+    // The dictionary changed, so cached word classifications are stale.
+    this.classifyCache.clear();
+    return count;
   }
 
   // === Panel management ===
@@ -407,13 +430,50 @@ export default class ConlangPlugin extends Plugin {
       (l) => l.dictionaryFolder && path.startsWith(l.dictionaryFolder)
     );
     if (!inDict) return;
-    void this.reloadActiveLanguage().then(() => {
+    // Debounced: metadataCache "changed" fires repeatedly while a dictionary
+    // note is being edited, and each reload is a full reindex plus a global
+    // re-render. Coalescing bursts keeps large dictionaries responsive.
+    this.scheduleDictionaryReload();
+  }
+
+  // Trailing-edge debounce (resetTimer=true): a burst of vault events results
+  // in one reload ~500ms after the last event.
+  private scheduleDictionaryReload = debounce(
+    () => void this.performDictionaryReload(),
+    500,
+    true
+  );
+  private reloadInFlight = false;
+  private reloadQueued = false;
+
+  /**
+   * Run one dictionary reload + UI refresh. If a reload is already running,
+   * queue exactly one follow-up so events that arrive mid-reload aren't lost,
+   * and overlapping reloads can't interleave.
+   */
+  private async performDictionaryReload() {
+    if (this.reloadInFlight) {
+      this.reloadQueued = true;
+      return;
+    }
+    this.reloadInFlight = true;
+    try {
+      await this.reloadActiveLanguage();
       this.refreshPanel();
       this.refreshHighlights();
-    });
+    } finally {
+      this.reloadInFlight = false;
+      if (this.reloadQueued) {
+        this.reloadQueued = false;
+        this.scheduleDictionaryReload();
+      }
+    }
   }
 
   refreshHighlights() {
+    // Settings (highlight direction, active languages, …) may have changed;
+    // cached classifications could be stale either way. Cheap to rebuild.
+    this.classifyCache.clear();
     this.applyHighlightStyleClass();
     // Primary mechanism: re-apply registered editor extensions across every
     // editor. This re-instantiates our ViewPlugin and re-runs its build()
@@ -1205,8 +1265,8 @@ export default class ConlangPlugin extends Plugin {
     // Phrase check FIRST: if the hovered word is part of a known phrase,
     // show the phrase entry rather than the single-word lookup. We scan
     // backward from the cursor looking for phrase starts.
-    const phrases = this.dictionary.allPhrases();
-    if (phrases.length > 0) {
+    const phrases = this.dictionary.phraseIndex();
+    if (phrases.size > 0) {
       const phraseHit = this.findPhraseAroundCursor(ctx, phrases);
       if (phraseHit) {
         this.showDictionaryTooltip(evt.clientX, evt.clientY, phraseHit);
@@ -1313,7 +1373,7 @@ export default class ConlangPlugin extends Plugin {
    */
   private findPhraseAroundCursor(
     ctx: { word: string; forwardContext: string; backwardContext: string },
-    phrases: DictionaryEntry[]
+    phrases: PhraseIndex
   ): DictionaryEntry | null {
     // Take all words in the backward+forward context, then for each starting
     // position try the phrase matcher. The matcher's longest-first guarantee

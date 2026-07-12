@@ -68,7 +68,7 @@ export function glossConlangToEnglish(
   lang: LanguageConfig | null
 ): GlossToken[] {
   const tokens: GlossToken[] = [];
-  const phrases = dictionary.allPhrases();
+  const phrases = dictionary.phraseIndex();
   const phraseTokens = tokeniseWithPhrases(text, phrases);
 
   for (const t of phraseTokens) {

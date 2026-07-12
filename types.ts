@@ -135,6 +135,13 @@ export interface ConlangSettings {
   // word meaning cat exists). Useful for spotting "I have a word for this",
   // but noisier in English-heavy notes.
   highlightEnglish: boolean;
+  // === Case-sensitive matching (v0.18) ===
+  // When true, conlang-word lookups (dictionary headwords, aliases, and
+  // phrase matching) distinguish case, so a capitalized form and its
+  // lowercase counterpart are treated as different words. Lets proper nouns
+  // like "Sol" coexist with a common noun "sol". English-direction lookups
+  // stay case-insensitive. Default false (the long-standing behaviour).
+  caseSensitiveMatching: boolean;
 }
 
 export const DEFAULT_SETTINGS: ConlangSettings = {
@@ -192,4 +199,5 @@ export const DEFAULT_SETTINGS: ConlangSettings = {
   highlightStyle: "underline",
   highlightConlang: true,
   highlightEnglish: true,
+  caseSensitiveMatching: false,
 };

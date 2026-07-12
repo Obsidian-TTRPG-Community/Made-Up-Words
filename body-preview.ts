@@ -30,7 +30,19 @@ export function extractBodyPreview(content: string): string {
       if (inParagraph) break; // end of first paragraph
       continue;
     }
+    // ATX heading (`# Foo`)
     if (line.startsWith("#")) continue;
+    // Setext heading underline (`===` or `---` on its own line): the text
+    // line we just collected was actually a heading, so drop it and keep
+    // scanning for real body text. (Frontmatter is already stripped above, so
+    // a `---` here is an underline or thematic break, not a YAML fence.)
+    if (/^(=+|-+)$/.test(line)) {
+      if (paragraph.length > 0) {
+        paragraph.pop();
+        if (paragraph.length === 0) inParagraph = false;
+      }
+      continue;
+    }
     if (/^Translates \*[^*]+\*\.?$/.test(line)) continue;
     paragraph.push(line);
     inParagraph = true;

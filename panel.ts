@@ -39,6 +39,13 @@ export class TranslationPanelView extends ItemView {
   private nameFilter: "all" | "names-only" | "hide-names" = "all";
   private languageFilter: string = ""; // empty = all active languages
   private sortKey: SortKey = "alphabetical";
+  // Row cap for the browser list. Large dictionaries would otherwise rebuild
+  // thousands of DOM rows per repaint. "Show more" raises the cap; any change
+  // to search/filters/sort resets it (tracked via browserFilterSig).
+  private static readonly BROWSER_PAGE = 200;
+  private browserLimit = TranslationPanelView.BROWSER_PAGE;
+  private browserFilterSig = "";
+  private searchDebounceTimer: number | null = null;
 
   // Translator-tab state. Persists while the panel stays open so the user
   // can switch tabs and come back without losing their work.
@@ -137,6 +144,10 @@ export class TranslationPanelView extends ItemView {
     if (this.translatorDebounceTimer !== null) {
       window.clearTimeout(this.translatorDebounceTimer);
       this.translatorDebounceTimer = null;
+    }
+    if (this.searchDebounceTimer !== null) {
+      window.clearTimeout(this.searchDebounceTimer);
+      this.searchDebounceTimer = null;
     }
   }
 
@@ -414,7 +425,7 @@ export class TranslationPanelView extends ItemView {
     // Phrase case: selection is multiple words. Try a phrase match.
     // Allow letters (any script), apostrophes, hyphens, and whitespace.
     if (/^[\p{L}'\s-]+$/u.test(trimmed) && /\s/.test(trimmed)) {
-      const phrases = this.plugin.dictionary.allPhrases();
+      const phrases = this.plugin.dictionary.phraseIndex();
       const phraseMatch = matchPhraseAtStart(trimmed, phrases);
       // For phrase matches, only enter word-details mode if the ENTIRE selection
       // is one phrase. Partial phrase matches fall through to the standard
@@ -481,7 +492,7 @@ export class TranslationPanelView extends ItemView {
     const found: DictionaryEntry[] = [];
     const seen = new Set<string>();
     const lang = this.plugin.getActiveLanguage();
-    const phrases = this.plugin.dictionary.allPhrases();
+    const phrases = this.plugin.dictionary.phraseIndex();
     // Use the phrase tokeniser so we recognise multi-word entries
     const tokens = tokeniseWithPhrases(text, phrases);
     for (const t of tokens) {
@@ -706,7 +717,7 @@ export class TranslationPanelView extends ItemView {
 
   private translateConlangToEnglish(text: string): string {
     const lang = this.plugin.getActiveLanguage();
-    const phrases = this.plugin.dictionary.allPhrases();
+    const phrases = this.plugin.dictionary.phraseIndex();
     const tokens = tokeniseWithPhrases(text, phrases);
     const out: string[] = [];
     for (const t of tokens) {
@@ -1268,7 +1279,15 @@ export class TranslationPanelView extends ItemView {
     searchInput.value = this.searchQuery;
     searchInput.addEventListener("input", () => {
       this.searchQuery = searchInput.value;
-      this.renderBrowserList();
+      // Debounced: filtering + rebuilding the list on every keystroke gets
+      // expensive with large dictionaries. 200ms after the last keystroke.
+      if (this.searchDebounceTimer !== null) {
+        window.clearTimeout(this.searchDebounceTimer);
+      }
+      this.searchDebounceTimer = window.setTimeout(() => {
+        this.searchDebounceTimer = null;
+        this.renderBrowserList();
+      }, 200);
     });
 
     const controlsRow = this.browserEl.createDiv({ cls: "conlang-browser-controls" });
@@ -1401,6 +1420,16 @@ export class TranslationPanelView extends ItemView {
 
     // Filter
     const q = this.searchQuery.trim().toLowerCase();
+
+    // Reset the row cap whenever the effective filter/sort changes, so a new
+    // search starts from the first page again.
+    const sig = [q, this.posFilter, this.nameFilter, this.languageFilter, this.sortKey].join(
+      " "
+    );
+    if (sig !== this.browserFilterSig) {
+      this.browserFilterSig = sig;
+      this.browserLimit = TranslationPanelView.BROWSER_PAGE;
+    }
     let filtered = all.filter((entry) => {
       // Names filter (proper-noun gating)
       const isName = this.isProperNoun(entry);
@@ -1469,8 +1498,24 @@ export class TranslationPanelView extends ItemView {
     this.browserListEl.removeClass("conlang-hidden");
     this.browserEmptyEl.addClass("conlang-hidden");
 
-    for (const entry of filtered) {
+    // Render up to the current cap; a "Show more" button extends it. This
+    // keeps the DOM small for multi-thousand-entry dictionaries.
+    const visible =
+      filtered.length > this.browserLimit
+        ? filtered.slice(0, this.browserLimit)
+        : filtered;
+    for (const entry of visible) {
       this.renderBrowserRow(entry);
+    }
+    if (filtered.length > visible.length) {
+      const moreBtn = this.browserListEl.createEl("button", {
+        cls: "conlang-panel-btn conlang-browser-show-more",
+        text: `Show more (${visible.length} of ${filtered.length} shown)`,
+      });
+      moreBtn.addEventListener("click", () => {
+        this.browserLimit += TranslationPanelView.BROWSER_PAGE * 2;
+        this.renderBrowserList();
+      });
     }
   }
 

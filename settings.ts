@@ -33,6 +33,7 @@ export class ConlangSettingTab extends PluginSettingTab {
     this.renderLanguageOverview(containerEl);
     this.renderHoverSection(containerEl);
     this.renderHighlightSection(containerEl);
+    this.renderMatchingSection(containerEl);
     this.renderTranslationSection(containerEl);
 
     new Setting(containerEl).setName("Individual languages").setHeading();
@@ -256,6 +257,27 @@ export class ConlangSettingTab extends PluginSettingTab {
       );
   }
 
+  private renderMatchingSection(containerEl: HTMLElement): void {
+    new Setting(containerEl).setName("Word matching").setHeading();
+    new Setting(containerEl)
+      .setName("Case-sensitive matching")
+      .setDesc(
+        "Treat capitalized and lowercase conlang words as different entries " +
+          "(e.g. a proper noun 'Sol' vs a common noun 'sol'). Affects dictionary " +
+          "headwords, aliases, and phrase matching. English-side lookups stay " +
+          "case-insensitive. Changing this reloads the dictionary."
+      )
+      .addToggle((tg) =>
+        tg.setValue(this.plugin.settings.caseSensitiveMatching).onChange(async (v) => {
+          this.plugin.settings.caseSensitiveMatching = v;
+          await this.plugin.saveSettings();
+          await this.plugin.reloadActiveLanguage();
+          this.plugin.refreshPanel();
+          this.plugin.refreshHighlights();
+        })
+      );
+  }
+
   private renderTranslationSection(containerEl: HTMLElement): void {
     new Setting(containerEl).setName("Translation").setHeading();
     new Setting(containerEl)
@@ -274,6 +296,20 @@ export class ConlangSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         });
       });
+  }
+
+  // ===== Reorder helper =====
+
+  /**
+   * Move an array item from one index to another, in place. No-ops if the
+   * destination is out of bounds (e.g. moving the first item up). Used by the
+   * up/down reorder buttons on inflection rules and cypher sheets, where list
+   * order is functionally significant.
+   */
+  private moveItem<T>(arr: T[], from: number, to: number): void {
+    if (to < 0 || to >= arr.length) return;
+    const [item] = arr.splice(from, 1);
+    arr.splice(to, 0, item);
   }
 
   // ===== Collapsible helper =====
@@ -415,9 +451,14 @@ export class ConlangSettingTab extends PluginSettingTab {
         "Sheets run top to bottom; each sheet's output feeds the next. " +
         "Rule types: word (whole word), prefix, suffix, default (anywhere).",
     });
-    for (let s = 0; s < lang.sheets.length; s++) {
-      this.renderSheet(sheetsBody, lang, s);
-    }
+    const sheetsListEl = sheetsBody.createDiv({ cls: "conlang-sheets-list" });
+    const rebuildSheets = () => {
+      sheetsListEl.empty();
+      for (let s = 0; s < lang.sheets.length; s++) {
+        this.renderSheet(sheetsListEl, lang, s, rebuildSheets);
+      }
+    };
+    rebuildSheets();
     new Setting(sheetsBody).addButton((b) =>
       b
         .setButtonText("Add sheet")
@@ -556,12 +597,39 @@ export class ConlangSettingTab extends PluginSettingTab {
     });
   }
 
-  private renderSheet(parent: HTMLElement, lang: LanguageConfig, sheetIndex: number): void {
+  private renderSheet(
+    parent: HTMLElement,
+    lang: LanguageConfig,
+    sheetIndex: number,
+    rebuildSheets: () => void
+  ): void {
     const sheet = lang.sheets[sheetIndex];
     const box = parent.createDiv({ cls: "conlang-sheet" });
 
     new Setting(box)
       .setName(sheet.name)
+      .addExtraButton((b) =>
+        b
+          .setIcon("arrow-up")
+          .setTooltip("Move sheet up")
+          .setDisabled(sheetIndex === 0)
+          .onClick(async () => {
+            this.moveItem(lang.sheets, sheetIndex, sheetIndex - 1);
+            await this.plugin.saveSettings();
+            rebuildSheets();
+          })
+      )
+      .addExtraButton((b) =>
+        b
+          .setIcon("arrow-down")
+          .setTooltip("Move sheet down")
+          .setDisabled(sheetIndex === lang.sheets.length - 1)
+          .onClick(async () => {
+            this.moveItem(lang.sheets, sheetIndex, sheetIndex + 1);
+            await this.plugin.saveSettings();
+            rebuildSheets();
+          })
+      )
       .addToggle((t) =>
         t
           .setTooltip("Enable sheet")
@@ -653,23 +721,61 @@ export class ConlangSettingTab extends PluginSettingTab {
   }
 
   private renderInflectionTable(parent: HTMLElement, lang: LanguageConfig): void {
-    const rules = lang.inflections ?? [];
     const tableWrap = parent.createDiv({ cls: "conlang-rules-wrap" });
-    const table = tableWrap.createEl("table", { cls: "conlang-rules-table" });
-    const thead = table.createEl("thead").createEl("tr");
-    ["Label", "Position", "Pattern", "Strip", "Add", "POS filter", "Description", "On", ""].forEach(
-      (h) => thead.createEl("th", { text: h })
-    );
-    const tbody = table.createEl("tbody");
-    for (let i = 0; i < rules.length; i++) {
-      this.renderInflectionRow(tbody, lang, i);
-    }
+    // Rebuild only this table (not the whole settings tab) when a rule moves,
+    // so reordering doesn't reset scroll position or collapse open sections.
+    const rebuild = () => {
+      tableWrap.empty();
+      const rules = lang.inflections ?? [];
+      const table = tableWrap.createEl("table", { cls: "conlang-rules-table" });
+      const thead = table.createEl("thead").createEl("tr");
+      ["", "Label", "Position", "Pattern", "Strip", "Add", "POS filter", "Description", "On", ""].forEach(
+        (h) => thead.createEl("th", { text: h })
+      );
+      const tbody = table.createEl("tbody");
+      for (let i = 0; i < rules.length; i++) {
+        this.renderInflectionRow(tbody, lang, i, rebuild);
+      }
+    };
+    rebuild();
   }
 
-  private renderInflectionRow(tbody: HTMLElement, lang: LanguageConfig, ruleIndex: number): void {
+  private renderInflectionRow(
+    tbody: HTMLElement,
+    lang: LanguageConfig,
+    ruleIndex: number,
+    rebuild: () => void
+  ): void {
     const rules = lang.inflections!;
     const rule = rules[ruleIndex];
     const tr = tbody.createEl("tr");
+
+    // Reorder controls live in the leftmost column so they stay visible without
+    // scrolling the wide rules table sideways. Order matters: first match wins.
+    const orderTd = tr.createEl("td");
+    const orderWrap = orderTd.createDiv({ cls: "conlang-reorder" });
+    const upBtn = orderWrap.createEl("button", {
+      cls: "conlang-reorder-btn",
+      text: "▲",
+      attr: { "aria-label": "Move rule up", title: "Move up" },
+    });
+    upBtn.disabled = ruleIndex === 0;
+    upBtn.addEventListener("click", () => {
+      this.moveItem(rules, ruleIndex, ruleIndex - 1);
+      void this.plugin.saveSettings();
+      rebuild();
+    });
+    const downBtn = orderWrap.createEl("button", {
+      cls: "conlang-reorder-btn",
+      text: "▼",
+      attr: { "aria-label": "Move rule down", title: "Move down" },
+    });
+    downBtn.disabled = ruleIndex === rules.length - 1;
+    downBtn.addEventListener("click", () => {
+      this.moveItem(rules, ruleIndex, ruleIndex + 1);
+      void this.plugin.saveSettings();
+      rebuild();
+    });
 
     const mkText = (value: string, onChange: (v: string) => void) => {
       const td = tr.createEl("td");

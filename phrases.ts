@@ -6,6 +6,10 @@
 // The matcher returns "tokens" — either a phrase match, a single word, or
 // a chunk of whitespace/punctuation. This is enough for downstream code to
 // reconstruct the text while substituting matched phrases.
+//
+// Performance: phrases are indexed by their first word, so per word position
+// we only examine phrases that could possibly start there. This keeps the
+// tokeniser O(words) even for dictionaries with thousands of phrase entries.
 
 import { DictionaryEntry } from "./types";
 import { WORD_RE } from "./word-tokens";
@@ -15,6 +19,65 @@ export interface MatchedToken {
   text: string;
   // For phrase tokens: the entry that matched
   entry?: DictionaryEntry;
+}
+
+/** A phrase entry with its lowercased words precomputed for fast comparison. */
+export interface IndexedPhrase {
+  entry: DictionaryEntry;
+  wordsLower: string[];
+}
+
+/**
+ * Phrase entries bucketed by their (lowercased) first word. Each bucket is
+ * sorted longest-first so the matcher's first hit is the longest match —
+ * the same priority order the old flat, fully-sorted list provided.
+ */
+export interface PhraseIndex {
+  byFirstWord: Map<string, IndexedPhrase[]>;
+  size: number;
+  // When true, phrase words were indexed with case preserved and the matcher
+  // compares case-sensitively. Mirrors the dictionary's caseSensitiveMatching.
+  caseSensitive: boolean;
+}
+
+/** Shared empty index for callers that have phrase matching disabled. */
+export const EMPTY_PHRASE_INDEX: PhraseIndex = {
+  byFirstWord: new Map(),
+  size: 0,
+  caseSensitive: false,
+};
+
+/** Normalise a phrase word for indexing/comparison, respecting case mode. */
+function normWord(s: string, caseSensitive: boolean): string {
+  return caseSensitive ? s : s.toLowerCase();
+}
+
+/**
+ * Build a first-word index from phrase entries. Lowercasing and word
+ * splitting happen once here instead of on every comparison. Buckets are
+ * sorted by word count descending; the sort is stable, so entries with the
+ * same length keep their insertion order (matching previous behaviour).
+ */
+export function buildPhraseIndex(
+  phrases: DictionaryEntry[],
+  caseSensitive = false
+): PhraseIndex {
+  const byFirstWord = new Map<string, IndexedPhrase[]>();
+  let size = 0;
+  for (const entry of phrases) {
+    const wordsLower = normWord(entry.word, caseSensitive)
+      .split(/\s+/)
+      .filter((w) => w.length > 0);
+    if (wordsLower.length < 2) continue; // phrases must be ≥ 2 words
+    const list = byFirstWord.get(wordsLower[0]) ?? [];
+    list.push({ entry, wordsLower });
+    byFirstWord.set(wordsLower[0], list);
+    size++;
+  }
+  for (const list of byFirstWord.values()) {
+    list.sort((a, b) => b.wordsLower.length - a.wordsLower.length);
+  }
+  return { byFirstWord, size, caseSensitive };
 }
 
 /**
@@ -29,7 +92,7 @@ export interface MatchedToken {
  */
 export function tokeniseWithPhrases(
   text: string,
-  phrases: DictionaryEntry[]
+  phrases: PhraseIndex
 ): MatchedToken[] {
   const out: MatchedToken[] = [];
   // Build a word-and-separator stream using the shared Unicode-aware
@@ -55,7 +118,8 @@ export function tokeniseWithPhrases(
     }
 
     // Try to match the longest phrase starting at this word.
-    const match = matchPhraseAt(words, wi, phrases, text);
+    const match =
+      phrases.size > 0 ? matchPhraseAt(words, wi, phrases, text) : null;
     if (match) {
       // Emit the entire phrase including the original spacing between its
       // words. We slice from the first word's start to the last word's end.
@@ -84,7 +148,8 @@ export function tokeniseWithPhrases(
 
 /**
  * Find the longest phrase entry that matches starting at `words[startIdx]`.
- * `phrases` is expected sorted by word count descending so the first match wins.
+ * Only phrases sharing the position's first word are examined (via the
+ * index); buckets are sorted by word count descending so the first match wins.
  *
  * We also verify the spacing between matched words is "clean" — only whitespace,
  * no punctuation that would break the phrase semantically. ("good. morning"
@@ -93,20 +158,23 @@ export function tokeniseWithPhrases(
 function matchPhraseAt(
   words: { text: string; start: number; end: number }[],
   startIdx: number,
-  phrases: DictionaryEntry[],
+  phrases: PhraseIndex,
   source: string
 ): { entry: DictionaryEntry; wordCount: number } | null {
+  const cs = phrases.caseSensitive;
+  const bucket = phrases.byFirstWord.get(normWord(words[startIdx].text, cs));
+  if (!bucket) return null;
   const remaining = words.length - startIdx;
-  for (const phrase of phrases) {
-    const wc = phrase.wordCount ?? 0;
-    if (wc < 2) continue; // shouldn't happen — phrases must be ≥ 2 words
+
+  for (const { entry, wordsLower } of bucket) {
+    const wc = wordsLower.length;
     if (wc > remaining) continue;
 
-    // Compare phrase words to source words, case-insensitive
-    const phraseWords = phrase.word.toLowerCase().split(/\s+/);
+    // Compare phrase words to source words. The first word already matched via
+    // the bucket lookup. Comparison honours the index's case-sensitivity mode.
     let allMatch = true;
-    for (let i = 0; i < wc; i++) {
-      if (words[startIdx + i].text.toLowerCase() !== phraseWords[i]) {
+    for (let i = 1; i < wc; i++) {
+      if (normWord(words[startIdx + i].text, cs) !== wordsLower[i]) {
         allMatch = false;
         break;
       }
@@ -126,7 +194,7 @@ function matchPhraseAt(
     }
     if (!cleanGaps) continue;
 
-    return { entry: phrase, wordCount: wc };
+    return { entry, wordCount: wc };
   }
   return null;
 }
@@ -138,7 +206,7 @@ function matchPhraseAt(
  */
 export function matchPhraseAtStart(
   text: string,
-  phrases: DictionaryEntry[]
+  phrases: PhraseIndex
 ): { entry: DictionaryEntry; matchedText: string } | null {
   const tokens = tokeniseWithPhrases(text, phrases);
   // Find the first non-separator token; if it's a phrase, we have a match.

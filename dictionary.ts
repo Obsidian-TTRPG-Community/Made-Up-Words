@@ -19,6 +19,11 @@ import { App, TFile, TFolder, CachedMetadata } from "obsidian";
 import { DictionaryEntry } from "./types";
 import { extractBodyPreview as _extractBodyPreview } from "./body-preview";
 import { parseStringList } from "./word-tokens";
+import {
+  buildPhraseIndex,
+  EMPTY_PHRASE_INDEX,
+  PhraseIndex,
+} from "./phrases";
 
 export class Dictionary {
   // Conlang lookup: multiple entries possible when multiple languages
@@ -28,19 +33,41 @@ export class Dictionary {
   // Phrase entries sorted by word count descending. The matcher walks this
   // list to try longer phrases first, so "good morning" beats "good".
   private phrases: DictionaryEntry[] = [];
+  // First-word index over `phrases`, rebuilt once per load. This is what the
+  // phrase matcher consumes — it avoids scanning every phrase at every word
+  // position, which matters once dictionaries grow large.
+  private phraseIdx: PhraseIndex = EMPTY_PHRASE_INDEX;
   // Ordered list of all entries in insertion order (preserves "recently
   // added" sorting and stable iteration).
   private all: DictionaryEntry[] = [];
   private app: App;
+  // When true, conlang-word indexing and lookups preserve case (see the
+  // caseSensitiveMatching setting). English-direction lookups are unaffected.
+  private caseSensitive = false;
 
   constructor(app: App) {
     this.app = app;
+  }
+
+  /**
+   * Set case-sensitive matching for conlang-word lookups. Call before a
+   * (re)load — the byWord/phrase indexes are keyed using this mode, so a
+   * change only takes effect once the dictionary is rebuilt.
+   */
+  setCaseSensitive(v: boolean): void {
+    this.caseSensitive = v;
+  }
+
+  /** Normalise a conlang word for indexing/lookup, respecting case mode. */
+  private norm(s: string): string {
+    return this.caseSensitive ? s : s.toLowerCase();
   }
 
   clear() {
     this.byWord.clear();
     this.byEnglish.clear();
     this.phrases = [];
+    this.phraseIdx = EMPTY_PHRASE_INDEX;
     this.all = [];
   }
 
@@ -50,7 +77,7 @@ export class Dictionary {
    * Use lookupAll() to get every match.
    */
   lookup(conlangWord: string): DictionaryEntry | undefined {
-    return this.byWord.get(conlangWord.toLowerCase())?.[0];
+    return this.byWord.get(this.norm(conlangWord))?.[0];
   }
 
   /**
@@ -58,7 +85,7 @@ export class Dictionary {
    * whose word matches, regardless of source language. Empty array if none.
    */
   lookupAll(conlangWord: string): DictionaryEntry[] {
-    return this.byWord.get(conlangWord.toLowerCase()) ?? [];
+    return this.byWord.get(this.norm(conlangWord)) ?? [];
   }
 
   /**
@@ -67,6 +94,14 @@ export class Dictionary {
    */
   allPhrases(): DictionaryEntry[] {
     return this.phrases;
+  }
+
+  /**
+   * First-word index over all phrase entries. This is what the phrase
+   * matcher (tokeniseWithPhrases / matchPhraseAtStart) consumes.
+   */
+  phraseIndex(): PhraseIndex {
+    return this.phraseIdx;
   }
 
   /**
@@ -135,8 +170,19 @@ export class Dictionary {
         }
       }
     }
+    this.finalizePhrases();
     void this.loadBodyPreviews(properNounEntries);
     return count;
+  }
+
+  /**
+   * Sort the phrase list (longest-first) and rebuild the first-word index.
+   * Called once at the end of a load instead of per-insert — sorting on every
+   * addEntry was O(n² log n) across a large load.
+   */
+  private finalizePhrases() {
+    this.phrases.sort((a, b) => (b.wordCount ?? 0) - (a.wordCount ?? 0));
+    this.phraseIdx = buildPhraseIndex(this.phrases, this.caseSensitive);
   }
 
   private isProperNoun(entry: DictionaryEntry): boolean {
@@ -222,23 +268,21 @@ export class Dictionary {
   }
 
   private addEntry(entry: DictionaryEntry) {
-    const key = entry.word.toLowerCase();
+    const key = this.norm(entry.word);
     const existing = this.byWord.get(key) ?? [];
     existing.push(entry);
     this.byWord.set(key, existing);
     this.all.push(entry);
     if (entry.isPhrase) {
+      // Sorting and indexing happen once in finalizePhrases() after the load.
       this.phrases.push(entry);
-      // Maintain phrase list sorted by word count descending so the matcher
-      // can walk it in priority order.
-      this.phrases.sort((a, b) => (b.wordCount ?? 0) - (a.wordCount ?? 0));
     }
 
     // Index any aliases so they resolve to this same entry. A multi-word alias
     // is also registered as a phrase so the phrase matcher can catch it.
     if (entry.aliases) {
       for (const alias of entry.aliases) {
-        const aliasKey = alias.toLowerCase();
+        const aliasKey = this.norm(alias);
         if (!aliasKey) continue;
         const list = this.byWord.get(aliasKey) ?? [];
         list.push(entry);
@@ -250,7 +294,6 @@ export class Dictionary {
             isPhrase: true,
             wordCount: alias.split(/\s+/).filter((w) => w.length > 0).length,
           });
-          this.phrases.sort((a, b) => (b.wordCount ?? 0) - (a.wordCount ?? 0));
         }
       }
     }
