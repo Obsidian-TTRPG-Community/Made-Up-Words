@@ -6,7 +6,7 @@ This project is pre-1.0. Expect rough edges and occasional breaking changes to
 settings or data formats. Where a change affects existing data, migration is
 handled automatically on load.
 
-## [Unreleased]
+## [0.19.0] - Homograph (multi-sense) entries
 
 _Resolves [#11](https://github.com/Obsidian-TTRPG-Community/Made-Up-Words/issues/11)._
 
@@ -24,6 +24,8 @@ _Resolves [#11](https://github.com/Obsidian-TTRPG-Community/Made-Up-Words/issues
 - **README:** documented the `word:` override as the recipe for multi-sense
   entries — it was previously described as phrase-only, leaving no documented
   way to create two entries with the same spelling. ([#11])
+
+[#11]: https://github.com/Obsidian-TTRPG-Community/Made-Up-Words/issues/11
 
 ## [0.18.0] - Reordering, quick word-adding, case-sensitivity & clickable words
 
