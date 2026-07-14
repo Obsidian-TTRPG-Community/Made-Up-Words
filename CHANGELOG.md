@@ -6,6 +6,25 @@ This project is pre-1.0. Expect rough edges and occasional breaking changes to
 settings or data formats. Where a change affects existing data, migration is
 handled automatically on load.
 
+## [Unreleased]
+
+_Resolves [#11](https://github.com/Obsidian-TTRPG-Community/Made-Up-Words/issues/11)._
+
+### Added
+- **Homograph (multi-sense) entry creation.** All add-word paths (add-a-word
+  modal, create-from-selection, batch creation, and add-a-name) now detect when
+  a word already exists with a *different* meaning and create a new sense file
+  (`word (partOfSpeech).md`) with the `word:` frontmatter override, instead of
+  silently opening/skipping the existing entry. Re-adding an existing meaning
+  still just opens the existing entry. Hover already showed every sense of a
+  shared spelling in one tooltip; now the UI can actually create those senses.
+  ([#11])
+
+### Changed
+- **README:** documented the `word:` override as the recipe for multi-sense
+  entries — it was previously described as phrase-only, leaving no documented
+  way to create two entries with the same spelling. ([#11])
+
 ## [0.18.0] - Reordering, quick word-adding, case-sensitivity & clickable words
 
 _Resolves [#4](https://github.com/Obsidian-TTRPG-Community/Made-Up-Words/issues/4),

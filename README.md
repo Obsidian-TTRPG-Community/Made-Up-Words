@@ -146,7 +146,7 @@ To customise: open Settings → Made Up Words. Cypher rules in sheets, inflectio
 
 ## Dictionary entry format
 
-A dictionary entry is a single markdown file. The filename is the conlang word by default; frontmatter can override this for phrase entries.
+A dictionary entry is a single markdown file. The filename is the conlang word by default; frontmatter can override this for phrase entries and homographs.
 
 ```markdown
 ---
@@ -171,11 +171,33 @@ Only `definition` is required. Supported frontmatter fields:
 | `partOfSpeech` | Used by inflection rules and the browser. Common values: noun, verb, adjective, adverb, pronoun, proper-noun, preposition, conjunction, interjection. |
 | `ipa` | Pronunciation. |
 | `etymology` | Origin / derivation notes. |
-| `word` | Overrides the filename as the surface form. Needed for phrase entries with spaces. |
+| `word` | Overrides the filename as the surface form. Needed for phrase entries with spaces, and for homographs — several files can declare the same `word` (see multi-sense entries below). |
 | `parts` | YAML list or comma-separated string of conlang words this compound decomposes into. |
 | `nameCategory` | For proper nouns: character, place, faction, artifact, event, title, other. |
 
-**Multi-sense entries:** if a word has genuinely different senses (e.g. English "see" = visual perception vs. understanding), create *separate dictionary entries* — one for each sense. Comma-separating in the definition only helps if you want one entry to match multiple English keys with effectively the same meaning ("water, liquid").
+**Multi-sense entries (homographs):** if a word has genuinely different senses (e.g. English "see" = visual perception vs. understanding), create *separate dictionary entries* — one for each sense. Two files can't share a name, so give each file a distinct name and declare the shared spelling with the `word:` override:
+
+```markdown
+# File: kala (verb).md
+---
+word: kala
+definition: to walk, to stroll
+partOfSpeech: verb
+---
+```
+
+```markdown
+# File: kala (noun).md
+---
+word: kala
+definition: guitar
+partOfSpeech: noun
+---
+```
+
+Both entries index under *kala* — hovering it in a note shows every sense in one tooltip, and lookups return all of them. The add-word commands handle this automatically: creating a word that already exists with a *different* meaning writes a new `word (partOfSpeech).md` sense file instead of failing, while re-adding an existing meaning just opens the existing entry.
+
+Comma-separating in the definition only helps if you want one entry to match multiple English keys with effectively the same meaning ("water, liquid").
 
 ---
 

@@ -4337,17 +4337,25 @@ var _ConlangPlugin = class _ConlangPlugin extends import_obsidian9.Plugin {
     if (!form) return { ok: false, error: "empty conlang form" };
     const folder = p.lang.dictionaryFolder;
     const safeName = form.replace(/[\\/:*?"<>|]/g, "_");
-    const path = `${folder}/${safeName}.md`;
+    let path = `${folder}/${safeName}.md`;
     try {
       await this.ensureFolderStrict(folder);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       return { ok: false, error: `couldn't create folder "${folder}": ${msg}` };
     }
+    let wordOverride = false;
     const existing = this.app.vault.getAbstractFileByPath(path);
-    if (existing instanceof import_obsidian9.TFile) return { ok: true, created: false, path };
+    if (existing instanceof import_obsidian9.TFile) {
+      if (this.entryCoversDefinition(existing, p.englishText)) {
+        return { ok: true, created: false, path };
+      }
+      path = this.freeHomographPath(folder, safeName, p.partOfSpeech);
+      wordOverride = true;
+    }
     const content = [
       "---",
+      ...wordOverride ? [`word: ${form}`] : [],
       `definition: ${p.englishText}`,
       `language: ${p.lang.name}`,
       `partOfSpeech: ${p.partOfSpeech}`,
@@ -4368,6 +4376,41 @@ var _ConlangPlugin = class _ConlangPlugin extends import_obsidian9.Plugin {
       const msg = e instanceof Error ? e.message : String(e);
       return { ok: false, error: `couldn't create "${path}": ${msg}` };
     }
+  }
+  /**
+   * Find a free file path for a new entry whose surface form collides with
+   * an existing file (a homograph). Two files can't share a name, so the new
+   * sense lives in a file with a disambiguating suffix and declares the real
+   * spelling via the `word:` frontmatter override. Prefers a part-of-speech
+   * suffix ("kala (noun).md"), falling back to numbers ("kala (2).md").
+   */
+  freeHomographPath(folder, safeName, partOfSpeech) {
+    const pos = (partOfSpeech != null ? partOfSpeech : "").trim().replace(/[\\/:*?"<>|]/g, "_");
+    if (pos) {
+      const p = `${folder}/${safeName} (${pos}).md`;
+      if (!this.app.vault.getAbstractFileByPath(p)) return p;
+    }
+    for (let n = 2; n < 100; n++) {
+      const p = `${folder}/${safeName} (${n}).md`;
+      if (!this.app.vault.getAbstractFileByPath(p)) return p;
+    }
+    return `${folder}/${safeName} (${Date.now()}).md`;
+  }
+  /**
+   * True when an existing entry file already covers the given English
+   * definition — i.e. any comma/semicolon-separated sense of the new
+   * definition matches one of the file's senses (case-insensitive). Used to
+   * tell "re-adding the same word" apart from "adding a new sense of a
+   * homograph".
+   */
+  entryCoversDefinition(file, definition) {
+    var _a, _b, _c, _d;
+    const fm = (_b = (_a = this.app.metadataCache.getFileCache(file)) == null ? void 0 : _a.frontmatter) != null ? _b : {};
+    const existing = (_d = (_c = fm.definition) != null ? _c : fm.translation) != null ? _d : fm.meaning;
+    if (typeof existing !== "string") return false;
+    const toSenses = (s) => s.split(/[,;]/).map((x) => x.trim().toLowerCase()).filter((x) => x.length > 0);
+    const have = new Set(toSenses(existing));
+    return toSenses(definition).some((s) => have.has(s));
   }
   /** Reload the dictionary + refresh UI after entries were added/changed. */
   async afterEntriesChanged() {
@@ -4486,18 +4529,24 @@ var _ConlangPlugin = class _ConlangPlugin extends import_obsidian9.Plugin {
     const translated = this.translateToConlangWith(englishText, lang);
     const folder = lang.dictionaryFolder;
     const safeName = translated.replace(/[\\/:*?"<>|]/g, "_");
-    const path = `${folder}/${safeName}.md`;
+    let path = `${folder}/${safeName}.md`;
     await this.ensureFolder(folder);
     const existing = this.app.vault.getAbstractFileByPath(path);
-    if (existing instanceof import_obsidian9.TFile) {
+    if (existing instanceof import_obsidian9.TFile && this.entryCoversDefinition(existing, englishText)) {
       await this.app.workspace.getLeaf(false).openFile(existing);
       new import_obsidian9.Notice(`Conlang: opened existing entry "${translated}"`);
       return;
     }
     const opts = await this.promptForEntryOptions(englishText, translated);
     if (opts === null) return;
+    let wordOverride = false;
+    if (existing instanceof import_obsidian9.TFile) {
+      path = this.freeHomographPath(folder, safeName, opts.partOfSpeech);
+      wordOverride = true;
+    }
     const content = [
       "---",
+      ...wordOverride ? [`word: ${translated}`] : [],
       `definition: ${englishText}`,
       `language: ${lang.name}`,
       `partOfSpeech: ${opts.partOfSpeech}`,
@@ -4518,8 +4567,9 @@ var _ConlangPlugin = class _ConlangPlugin extends import_obsidian9.Plugin {
     this.refreshHighlights();
     this.lastHoverWord = null;
     const isActive = this.settings.activeLanguages.includes(lang.name);
+    const senseNote = wordOverride ? " as a new sense of an existing word" : "";
     new import_obsidian9.Notice(
-      isActive ? `Made Up Words: created "${translated}" in ${lang.name}` : `Made Up Words: created "${translated}" in ${lang.name} (inactive \u2014 activate it to see hover/highlight)`
+      isActive ? `Made Up Words: created "${translated}" in ${lang.name}${senseNote}` : `Made Up Words: created "${translated}" in ${lang.name}${senseNote} (inactive \u2014 activate it to see hover/highlight)`
     );
   }
   promptForEntryOptions(englishText, translated) {
@@ -4546,15 +4596,21 @@ var _ConlangPlugin = class _ConlangPlugin extends import_obsidian9.Plugin {
     const folder = lang.dictionaryFolder;
     await this.ensureFolder(folder);
     const safeName = result.conlangWord.replace(/[\\/:*?"<>|]/g, "_");
-    const path = `${folder}/${safeName}.md`;
+    let path = `${folder}/${safeName}.md`;
+    let wordOverride = false;
     const existing = this.app.vault.getAbstractFileByPath(path);
     if (existing instanceof import_obsidian9.TFile) {
-      await this.app.workspace.getLeaf(false).openFile(existing);
-      new import_obsidian9.Notice(`Conlang: opened existing entry "${result.conlangWord}"`);
-      return;
+      if (this.entryCoversDefinition(existing, result.englishDefinition)) {
+        await this.app.workspace.getLeaf(false).openFile(existing);
+        new import_obsidian9.Notice(`Conlang: opened existing entry "${result.conlangWord}"`);
+        return;
+      }
+      path = this.freeHomographPath(folder, safeName, result.partOfSpeech);
+      wordOverride = true;
     }
     const fmLines = [
       "---",
+      ...wordOverride ? [`word: ${result.conlangWord}`] : [],
       `definition: ${result.englishDefinition}`,
       `language: ${lang.name}`
     ];
@@ -4572,7 +4628,9 @@ var _ConlangPlugin = class _ConlangPlugin extends import_obsidian9.Plugin {
     this.refreshPanel();
     this.refreshHighlights();
     this.lastHoverWord = null;
-    new import_obsidian9.Notice(`Conlang: added "${result.conlangWord}"`);
+    new import_obsidian9.Notice(
+      wordOverride ? `Conlang: added "${result.conlangWord}" as a new sense of an existing word` : `Conlang: added "${result.conlangWord}"`
+    );
   }
   /**
    * Open the Create Name modal and, on submit, create a proper-noun
@@ -4590,16 +4648,22 @@ var _ConlangPlugin = class _ConlangPlugin extends import_obsidian9.Plugin {
     const folder = lang.dictionaryFolder;
     await this.ensureFolder(folder);
     const safeName = result.conlangForm.replace(/[\\/:*?"<>|]/g, "_");
-    const path = `${folder}/${safeName}.md`;
+    let path = `${folder}/${safeName}.md`;
+    const referent = result.referent || result.conlangForm;
+    let wordOverride = false;
     const existing = this.app.vault.getAbstractFileByPath(path);
     if (existing instanceof import_obsidian9.TFile) {
-      await this.app.workspace.getLeaf(false).openFile(existing);
-      new import_obsidian9.Notice(`Conlang: opened existing entry "${result.conlangForm}"`);
-      return;
+      if (this.entryCoversDefinition(existing, referent)) {
+        await this.app.workspace.getLeaf(false).openFile(existing);
+        new import_obsidian9.Notice(`Conlang: opened existing entry "${result.conlangForm}"`);
+        return;
+      }
+      path = this.freeHomographPath(folder, safeName, result.category || "name");
+      wordOverride = true;
     }
-    const referent = result.referent || result.conlangForm;
     const content = [
       "---",
+      ...wordOverride ? [`word: ${result.conlangForm}`] : [],
       `definition: ${referent}`,
       `language: ${lang.name}`,
       "partOfSpeech: proper-noun",
