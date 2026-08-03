@@ -121,7 +121,6 @@ export default class ConlangPlugin extends Plugin {
       void this.openPanel();
     });
     ribbon.addClass("conlang-ribbon-icon");
-    console.log("[Made Up Words] plugin loaded, ribbon icon added");
 
     this.addCommand({
       id: "open-panel",
@@ -857,8 +856,11 @@ export default class ConlangPlugin extends Plugin {
    * homograph".
    */
   private entryCoversDefinition(file: TFile, definition: string): boolean {
-    const fm = this.app.metadataCache.getFileCache(file)?.frontmatter ?? {};
-    const existing = fm.definition ?? fm.translation ?? fm.meaning;
+    // Frontmatter is typed loosely by Obsidian; treat the values as unknown and
+    // narrow explicitly rather than letting an `any` leak into the comparison.
+    const fm: Record<string, unknown> =
+      this.app.metadataCache.getFileCache(file)?.frontmatter ?? {};
+    const existing: unknown = fm.definition ?? fm.translation ?? fm.meaning;
     if (typeof existing !== "string") return false;
     const toSenses = (s: string) =>
       s
@@ -1560,16 +1562,22 @@ export default class ConlangPlugin extends Plugin {
     // caretRangeFromPoint is marked deprecated but remains the most broadly
     // supported option on Chromium; caretPositionFromPoint is the standard
     // fallback. Intentionally probing both.
-    if (typeof doc.caretRangeFromPoint === "function") {
-      const range: Range | null = doc.caretRangeFromPoint(x, y);
-      if (!range) return null;
-      textNode = range.startContainer;
-      offset = range.startOffset;
-    } else if (typeof doc.caretPositionFromPoint === "function") {
+    // Prefer the standard `caretPositionFromPoint`; fall back to the legacy
+    // `caretRangeFromPoint` for the older Chromium builds shipped with
+    // Obsidian releases down to minAppVersion 1.7.2, where the standard method
+    // isn't available. The fallback is deliberate, hence the disable below.
+    if (typeof doc.caretPositionFromPoint === "function") {
       const pos = doc.caretPositionFromPoint(x, y);
       if (!pos) return null;
       textNode = pos.offsetNode;
       offset = pos.offset;
+      // eslint-disable-next-line @typescript-eslint/no-deprecated
+    } else if (typeof doc.caretRangeFromPoint === "function") {
+      // eslint-disable-next-line @typescript-eslint/no-deprecated
+      const range: Range | null = doc.caretRangeFromPoint(x, y);
+      if (!range) return null;
+      textNode = range.startContainer;
+      offset = range.startOffset;
     }
     if (!textNode || textNode.nodeType !== Node.TEXT_NODE) return null;
     const text = textNode.textContent ?? "";

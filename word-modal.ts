@@ -57,6 +57,10 @@ export class WordCreationModal extends Modal {
 
     contentEl.createEl("div", { cls: "conlang-modal-label", text: "English meaning" });
     this.englishInput = contentEl.createEl("input", { type: "text" });
+    // The sentence-case rule reads the full stop in "e.g." as a sentence
+    // boundary and demands the next word be capitalised ("E.g. Noun"). The
+    // copy is correct as written, so the rule is suppressed rather than obeyed.
+    // eslint-disable-next-line obsidianmd/ui/sentence-case
     this.englishInput.placeholder = "e.g. water, to walk, red";
     this.englishInput.addClass("conlang-modal-input");
     this.englishInput.addEventListener("input", () => {
@@ -81,6 +85,10 @@ export class WordCreationModal extends Modal {
 
     contentEl.createEl("div", { cls: "conlang-modal-label", text: "Part of speech (optional)" });
     this.posInput = contentEl.createEl("input", { type: "text" });
+    // The sentence-case rule reads the full stop in "e.g." as a sentence
+    // boundary and demands the next word be capitalised ("E.g. Noun"). The
+    // copy is correct as written, so the rule is suppressed rather than obeyed.
+    // eslint-disable-next-line obsidianmd/ui/sentence-case
     this.posInput.placeholder = "e.g. noun, verb, adjective…";
     this.posInput.addClass("conlang-modal-input");
     this.posInput.addEventListener("input", () => {

@@ -24,10 +24,29 @@ export default defineConfig([
       parserOptions: { project: "./tsconfig.json" },
     },
     rules: {
-      // "Made Up Words" is a brand name, not a sentence to lower-case.
+      // Words the sentence-case rule must not lower-case:
+      //   - "Made Up Words" is the plugin's own name.
+      //   - "English" is a proper noun; the rule would rewrite it to "english".
+      //   - "Reading view" / "Live Preview" are Obsidian's own UI names, so
+      //     matching Obsidian's capitalisation is more correct than the rule.
+      //   - "Alt", "Option", "Ctrl", "Cmd", "Shift" are key names as printed
+      //     on keyboards.
       "obsidianmd/ui/sentence-case": [
         "error",
-        { brands: ["Made Up Words"], acronyms: ["IPA"] },
+        {
+          brands: [
+            "Made Up Words",
+            "English",
+            "Reading view",
+            "Live Preview",
+            "Alt",
+            "Option",
+            "Ctrl",
+            "Cmd",
+            "Shift",
+          ],
+          acronyms: ["IPA", "CSS", "POS"],
+        },
       ],
     },
   },

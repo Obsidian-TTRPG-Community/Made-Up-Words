@@ -232,6 +232,9 @@ export class TranslationPanelView extends ItemView {
       const actions = this.headerEl.createDiv({ cls: "conlang-panel-header-actions" });
 
       const wordBtn = actions.createEl("button", {
+        // The first token is a glyph, not a word, so the rule wants "+ word" /
+        // "swap direction" — which reads worse than the label users already know.
+        // eslint-disable-next-line obsidianmd/ui/sentence-case
         text: "+ Word",
         cls: "conlang-panel-btn",
       });
@@ -239,6 +242,9 @@ export class TranslationPanelView extends ItemView {
       wordBtn.addEventListener("click", () => void this.plugin.createWordFromPanel());
 
       const nameBtn = actions.createEl("button", {
+        // The first token is a glyph, not a word, so the rule wants "+ word" /
+        // "swap direction" — which reads worse than the label users already know.
+        // eslint-disable-next-line obsidianmd/ui/sentence-case
         text: "+ Name",
         cls: "conlang-panel-btn",
       });
@@ -346,7 +352,7 @@ export class TranslationPanelView extends ItemView {
     });
     const hint = this.translateEmptyEl.createDiv({ cls: "conlang-empty-hint" });
     hint.setText(
-      "This tab updates automatically as you select text. Select English to see how it translates, or select a conlang word to see its dictionary entry. For free-form typing, use the Translator tab instead."
+      "This tab updates automatically as you select text. Select English to see how it translates, or select a conlang word to see its dictionary entry. For free-form typing, use the translator tab instead."
     );
 
     this.translateBodyEl = this.tabContentEl.createDiv({
@@ -953,6 +959,9 @@ export class TranslationPanelView extends ItemView {
     // Swap button between input and output
     const swapRow = this.translatorEl.createDiv({ cls: "conlang-translator-swap-row" });
     this.translatorSwapBtn = swapRow.createEl("button", {
+      // The first token is a glyph, not a word, so the rule wants "+ word" /
+      // "swap direction" — which reads worse than the label users already know.
+      // eslint-disable-next-line obsidianmd/ui/sentence-case
       text: "↑↓ Swap direction",
       cls: "conlang-panel-btn conlang-translator-swap",
     });
@@ -1137,7 +1146,7 @@ export class TranslationPanelView extends ItemView {
           const target = head.createSpan({ cls: "conlang-gloss-token-target" });
           target.setText(c.word);
           const tag = head.createSpan({ cls: "conlang-gloss-token-tag" });
-          tag.setText("phrase");
+          tag.setText("Phrase");
           this.renderTokenMeta(card, c);
         }
         break;
@@ -1165,13 +1174,13 @@ export class TranslationPanelView extends ItemView {
         const target = head.createSpan({ cls: "conlang-gloss-token-target" });
         target.setText(t.cypherOutput ?? "");
         const tag = head.createSpan({ cls: "conlang-gloss-token-tag conlang-gloss-warn" });
-        tag.setText("cypher only");
+        tag.setText("Cypher only");
         tag.title = "No dictionary entry — this is a phonological placeholder from the cypher rules, not a real translation.";
         break;
       }
       case "no-match": {
         const tag = head.createSpan({ cls: "conlang-gloss-token-tag conlang-gloss-warn" });
-        tag.setText("no match");
+        tag.setText("No match");
         tag.title = "No dictionary entry and the cypher rules don't apply. Consider adding this to the dictionary.";
         break;
       }
@@ -1436,7 +1445,7 @@ export class TranslationPanelView extends ItemView {
       const langLabel = controlsRow.createSpan({ cls: "conlang-browser-control-label" });
       langLabel.setText("Language");
       const langSelect = controlsRow.createEl("select", { cls: "conlang-browser-select" });
-      langSelect.createEl("option", { text: "all", value: "" });
+      langSelect.createEl("option", { text: "All", value: "" });
       for (const l of activeLangs) {
         langSelect.createEl("option", { text: l.name, value: l.name });
       }
@@ -1556,7 +1565,7 @@ export class TranslationPanelView extends ItemView {
         });
         const hint = this.browserEmptyEl.createDiv({ cls: "conlang-empty-hint" });
         hint.setText(
-          "Try clearing the search box, changing the type filter, or switching the Names filter to 'All'."
+          "Try clearing the search box, changing the type filter, or showing all names."
         );
       } else {
         // Genuinely empty dictionary — first-time onboarding hint
@@ -1638,7 +1647,7 @@ export class TranslationPanelView extends ItemView {
     if (entry.isPhrase) {
       // Small "phrase" badge so multi-word entries are visually distinct
       const phraseBadge = word.createSpan({ cls: "conlang-browser-row-badge" });
-      phraseBadge.setText("phrase");
+      phraseBadge.setText("Phrase");
     }
     // Language label, only shown when multiple languages are active so users
     // can see which language each entry belongs to in the merged list.

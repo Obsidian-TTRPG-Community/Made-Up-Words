@@ -74,6 +74,10 @@ export class EntryCreationModal extends Modal {
     });
 
     this.posInput = contentEl.createEl("input", { type: "text" });
+    // The sentence-case rule reads the full stop in "e.g." as a sentence
+    // boundary and demands the next word be capitalised ("E.g. Noun"). The
+    // copy is correct as written, so the rule is suppressed rather than obeyed.
+    // eslint-disable-next-line obsidianmd/ui/sentence-case
     this.posInput.placeholder = "e.g. noun, verb, adjective…";
     this.posInput.addClass("conlang-modal-input");
     window.setTimeout(() => this.posInput.focus(), 0);
@@ -179,6 +183,10 @@ export class MultiEntryModal extends Modal {
         "inflection rules target the right words. Pick one or type your own.",
     });
     this.posInput = contentEl.createEl("input", { type: "text" });
+    // The sentence-case rule reads the full stop in "e.g." as a sentence
+    // boundary and demands the next word be capitalised ("E.g. Noun"). The
+    // copy is correct as written, so the rule is suppressed rather than obeyed.
+    // eslint-disable-next-line obsidianmd/ui/sentence-case
     this.posInput.placeholder = "e.g. noun, verb, adjective…";
     this.posInput.addClass("conlang-modal-input");
     buildPosChips(contentEl, (value) => {
@@ -208,7 +216,7 @@ export class MultiEntryModal extends Modal {
 
       const formInput = row.createEl("input", { type: "text", value: init.form });
       formInput.addClass("conlang-modal-lang-form");
-      formInput.placeholder = "conlang form";
+      formInput.placeholder = "Conlang form";
       formInput.addEventListener("input", () => {
         if (formInput.value.trim()) checkbox.checked = true;
       });

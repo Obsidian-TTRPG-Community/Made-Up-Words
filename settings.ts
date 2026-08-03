@@ -25,7 +25,24 @@ export class ConlangSettingTab extends PluginSettingTab {
     this.plugin = plugin;
   }
 
+  /**
+   * Obsidian's entry point into this tab. Kept as a thin wrapper so that the
+   * ~15 internal "something changed, redraw" callers go through `rerender()`
+   * instead of calling `display()` on themselves.
+   *
+   * That indirection is deliberate: `PluginSettingTab.display` is marked
+   * deprecated as of Obsidian 1.13.0 in favour of `getSettingDefinitions`,
+   * but this plugin's `minAppVersion` is 1.7.2 and the new API doesn't exist
+   * there. Overriding `display` is still the only way to support 1.7.2, so we
+   * keep the override and simply stop referencing the deprecated symbol from
+   * our own code.
+   */
   display(): void {
+    this.rerender();
+  }
+
+  /** Build (or rebuild) the whole settings pane. */
+  private rerender(): void {
     const { containerEl } = this;
     containerEl.empty();
     containerEl.addClass("conlang-settings");
@@ -68,7 +85,7 @@ export class ConlangSettingTab extends PluginSettingTab {
       const cb = row.createEl("input", { type: "checkbox" });
       cb.checked = isActive;
       cb.addEventListener("change", () => {
-        void this.toggleActive(lang.name, cb.checked).then(() => this.display());
+        void this.toggleActive(lang.name, cb.checked).then(() => this.rerender());
       });
 
       const star = row.createSpan({
@@ -83,7 +100,7 @@ export class ConlangSettingTab extends PluginSettingTab {
           }
           this.plugin.settings.primaryLanguage = lang.name;
           await this.plugin.saveSettings();
-          this.display();
+          this.rerender();
         })();
       });
 
@@ -114,7 +131,7 @@ export class ConlangSettingTab extends PluginSettingTab {
             });
             this.openCards.add(newName);
             await this.plugin.saveSettings();
-            this.display();
+            this.rerender();
           })
       )
       .addButton((btn) =>
@@ -208,7 +225,7 @@ export class ConlangSettingTab extends PluginSettingTab {
         tg.setValue(this.plugin.settings.highlightKnownWords).onChange(async (v) => {
           this.plugin.settings.highlightKnownWords = v;
           await this.plugin.saveSettings();
-          this.display();
+          this.rerender();
         })
       );
 
@@ -403,7 +420,7 @@ export class ConlangSettingTab extends PluginSettingTab {
       .addToggle((tg) =>
         tg.setValue(isActive).onChange(async (v) => {
           await this.toggleActive(lang.name, v);
-          this.display();
+          this.rerender();
         })
       );
 
@@ -415,7 +432,7 @@ export class ConlangSettingTab extends PluginSettingTab {
           b.setButtonText("Make primary").onClick(async () => {
             this.plugin.settings.primaryLanguage = lang.name;
             await this.plugin.saveSettings();
-            this.display();
+            this.rerender();
           })
         );
     }
@@ -446,6 +463,11 @@ export class ConlangSettingTab extends PluginSettingTab {
       .addButton((b) =>
         b
           .setButtonText("Remove language")
+          // `setWarning` is deprecated in Obsidian 1.13.0 in favour of
+          // `setDestructive`, but that method doesn't exist on 1.7.2, which is
+          // this plugin's minAppVersion — calling it there would throw. Keep
+          // `setWarning` until minAppVersion moves past 1.13.0.
+          // eslint-disable-next-line @typescript-eslint/no-deprecated
           .setWarning()
           .onClick(async () => {
             await this.removeLanguage(index, lang.name);
@@ -485,7 +507,7 @@ export class ConlangSettingTab extends PluginSettingTab {
           });
           this.openSheets.add(lang.name);
           await this.plugin.saveSettings();
-          this.display();
+          this.rerender();
         })
     );
 
@@ -538,7 +560,7 @@ export class ConlangSettingTab extends PluginSettingTab {
             lang.inflections = preset.rules.map((r) => ({ ...r }));
             this.openInflections.add(lang.name);
             await this.plugin.saveSettings();
-            this.display();
+            this.rerender();
             new Notice(`Made Up Words: applied preset "${preset.name}"`);
           })
       );
@@ -557,7 +579,7 @@ export class ConlangSettingTab extends PluginSettingTab {
         });
         this.openInflections.add(lang.name);
         await this.plugin.saveSettings();
-        this.display();
+        this.rerender();
       })
     );
   }
@@ -587,7 +609,7 @@ export class ConlangSettingTab extends PluginSettingTab {
     await this.plugin.reloadActiveLanguage();
     this.plugin.refreshPanel();
     this.plugin.refreshHighlights();
-    this.display();
+    this.rerender();
   }
 
   /**
@@ -660,7 +682,7 @@ export class ConlangSettingTab extends PluginSettingTab {
           .onClick(async () => {
             lang.sheets.splice(sheetIndex, 1);
             await this.plugin.saveSettings();
-            this.display();
+            this.rerender();
           })
       );
 
@@ -684,7 +706,7 @@ export class ConlangSettingTab extends PluginSettingTab {
       b.setButtonText("Add rule").onClick(async () => {
         sheet.rules.push({ input: "", output: "", type: "default", enabled: true });
         await this.plugin.saveSettings();
-        this.display();
+        this.rerender();
       })
     );
   }
@@ -730,7 +752,7 @@ export class ConlangSettingTab extends PluginSettingTab {
     const deleteBtn = deleteTd.createEl("button", { text: "×" });
     deleteBtn.addEventListener("click", () => {
       sheet.rules.splice(ruleIndex, 1);
-      void this.plugin.saveSettings().then(() => this.display());
+      void this.plugin.saveSettings().then(() => this.rerender());
     });
   }
 
@@ -834,7 +856,7 @@ export class ConlangSettingTab extends PluginSettingTab {
     const deleteBtn = deleteTd.createEl("button", { text: "×" });
     deleteBtn.addEventListener("click", () => {
       rules.splice(ruleIndex, 1);
-      void this.plugin.saveSettings().then(() => this.display());
+      void this.plugin.saveSettings().then(() => this.rerender());
     });
   }
 }

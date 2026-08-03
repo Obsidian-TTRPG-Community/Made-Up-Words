@@ -6,6 +6,44 @@ This project is pre-1.0. Expect rough edges and occasional breaking changes to
 settings or data formats. Where a change affects existing data, migration is
 handled automatically on load.
 
+## [0.20.1] - Lint and code-health pass
+
+_No new features. A full pass over the Obsidian plugin-guideline lint rules,
+taking the repo from 52 errors to zero. User-facing behaviour is unchanged
+apart from four small text corrections noted below._
+
+### Fixed
+- **Removed a stray `console.log` on plugin load.** Obsidian's guidelines ask
+  plugins not to log to the console in normal operation; this one had been
+  shipping since the ribbon icon was added.
+- **Capitalised four UI strings** that were lower-cased inconsistently: the
+  `Phrase` / `Cypher only` / `No match` gloss badges (rendered uppercase by
+  CSS, so no visible change), the browser's language filter `All` option, and
+  the "Conlang form" placeholder.
+- **Reworded two hint strings** that referred to UI controls by names that no
+  longer matched their labels.
+
+### Changed
+- **Settings tab no longer calls the deprecated `PluginSettingTab.display()`
+  on itself.** The ~14 internal "redraw after an edit" callers now go through
+  a private `rerender()`, with `display()` kept as the thin override Obsidian
+  calls. `getSettingDefinitions` (the replacement API) only exists in Obsidian
+  1.13.0+, and this plugin's `minAppVersion` is 1.7.2, so migrating to it
+  would drop support for every version in between. No behaviour change.
+- **Caret resolution now prefers the standard `caretPositionFromPoint`**,
+  falling back to the legacy `caretRangeFromPoint` on the older Chromium
+  builds shipped with Obsidian back to 1.7.2.
+- **Frontmatter reads are typed as `unknown` and narrowed explicitly** rather
+  than letting an `any` flow into a string comparison.
+- **`eslint.config.mjs` teaches the sentence-case rule about proper nouns** it
+  was wrongly lower-casing — "English", Obsidian's own "Reading view" and
+  "Live Preview", keyboard names, and the CSS/POS acronyms. The remaining ten
+  reports are suppressed inline with a comment explaining why the rule's
+  suggestion would make the text worse (it reads the full stop in "e.g." as a
+  sentence break, and wants "+ word" where the first token is a glyph).
+- **`setWarning()` on the remove-language button is kept** with a documented
+  suppression: its replacement `setDestructive()` doesn't exist on 1.7.2.
+
 ## [0.20.0] - Hardcoded inflections & form tables
 
 _Resolves [#10](https://github.com/Obsidian-TTRPG-Community/Made-Up-Words/issues/10)
