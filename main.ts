@@ -943,13 +943,40 @@ export default class ConlangPlugin extends Plugin {
       out.push({ kind: "dictionary", candidates: directMatches });
     }
 
-    // 2. Inflected form (only meaningful for single words) — try each language's rules
+    // 2a. Hardcoded forms declared on an entry (`forms:` frontmatter). Listed
+    // before rule matches because a declared irregular outranks a derivation.
+    // Multi-word declared forms are indexed too, so this isn't gated on
+    // single words the way rule matching is.
+    // One lemma can declare the same surface form under several labels
+    // (syncretism — a genuinely common thing in case systems). Merge those
+    // into one card rather than repeating the entry per label.
+    const formLabelsByPath = new Map<string, { lemma: DictionaryEntry; labels: string[] }>();
+    for (const hit of this.dictionary.lookupForm(cleaned)) {
+      if (directMatches.some((e) => e.path === hit.lemma.path)) continue;
+      const acc = formLabelsByPath.get(hit.lemma.path);
+      if (acc) {
+        if (!acc.labels.includes(hit.label)) acc.labels.push(hit.label);
+      } else {
+        formLabelsByPath.set(hit.lemma.path, { lemma: hit.lemma, labels: [hit.label] });
+      }
+    }
+    for (const { lemma, labels } of formLabelsByPath.values()) {
+      out.push({
+        kind: "inflected",
+        candidates: [lemma],
+        inflectionLabel: labels.join(" / "),
+      });
+    }
+
+    // 2b. Inflected form (only meaningful for single words) — try each language's rules
     if (!/\s/.test(cleaned)) {
       for (const lang of activeLangs) {
         const inflectionMatch = findInflection(cleaned, this.dictionary, lang.inflections);
         if (!inflectionMatch) continue;
-        const alreadyShown = directMatches.some(
-          (e) => e.path === inflectionMatch.lemma.path
+        // Skip if this lemma is already on the list — either as a direct hit
+        // or via a hardcoded form, which supersedes the rule derivation.
+        const alreadyShown = out.some((m) =>
+          (m.candidates ?? []).some((c) => c.path === inflectionMatch.lemma.path)
         );
         if (alreadyShown) continue;
         out.push({
@@ -1397,12 +1424,28 @@ export default class ConlangPlugin extends Plugin {
       return;
     }
 
-    // No direct/English match — try inflection rules from each active language.
+    // No direct/English match — check hardcoded forms BEFORE the rules, so a
+    // declared irregular always wins over whatever a rule would derive.
+    const declaredForm = this.dictionary.lookupForm(cleaned)[0];
+    if (declaredForm) {
+      this.showInflectionTooltip(evt.clientX, evt.clientY, {
+        lemma: declaredForm.lemma,
+        label: declaredForm.label,
+        inflectedForm: cleaned,
+      });
+      return;
+    }
+
+    // Then try inflection rules from each active language.
     const activeLanguages = this.getActiveLanguages();
     for (const activeLang of activeLanguages) {
       const inflectionMatch = findInflection(cleaned, this.dictionary, activeLang.inflections);
       if (inflectionMatch) {
-        this.showInflectionTooltip(evt.clientX, evt.clientY, inflectionMatch);
+        this.showInflectionTooltip(
+          evt.clientX,
+          evt.clientY,
+          ConlangPlugin.toFormBanner(inflectionMatch)
+        );
         return;
       }
     }
@@ -1559,14 +1602,40 @@ export default class ConlangPlugin extends Plugin {
       window.clearTimeout(this.tooltipHideTimer);
       this.tooltipHideTimer = null;
     }
+    // A multi-word declared form is indexed as a synthetic phrase entry. Show
+    // the real lemma with the usual "= plural of X" banner, so it reads the
+    // same as a single-word declared form rather than as its own headword.
+    const declaredLemma = this.dictionary.lemmaForDeclaredPhrase(entry);
+    if (declaredLemma && entry.viaFormLabel) {
+      this.showInflectionTooltip(x, y, {
+        lemma: declaredLemma,
+        label: entry.viaFormLabel,
+        inflectedForm: entry.word,
+      });
+      return;
+    }
     const el = this.ensureTooltipEl();
     el.empty();
-    Dictionary.renderTooltip(entry, el);
+    Dictionary.renderTooltip(
+      entry,
+      el,
+      this.getActiveLanguages().length > 1,
+      this.settings.showFormsInTooltip
+    );
     el.addClass("conlang-tooltip-visible");
     this.positionTooltip(x, y);
   }
 
-  private showInflectionTooltip(x: number, y: number, match: InflectionMatch) {
+  /**
+   * Tooltip for a word that resolved to a lemma via inflection — either a
+   * hardcoded `forms:` declaration or a rule match. Both render identically;
+   * the user shouldn't have to care which route got them there.
+   */
+  private showInflectionTooltip(
+    x: number,
+    y: number,
+    match: { lemma: DictionaryEntry; label: string; inflectedForm: string }
+  ) {
     if (this.tooltipHideTimer !== null) {
       window.clearTimeout(this.tooltipHideTimer);
       this.tooltipHideTimer = null;
@@ -1575,13 +1644,27 @@ export default class ConlangPlugin extends Plugin {
     el.empty();
     // Render the dictionary entry as normal, then add a banner line noting
     // that this is an inflected form.
-    Dictionary.renderTooltip(match.lemma, el);
+    Dictionary.renderTooltip(
+      match.lemma,
+      el,
+      this.getActiveLanguages().length > 1,
+      this.settings.showFormsInTooltip
+    );
     el.createDiv({
       cls: "conlang-tooltip-inflection",
-      text: `${match.inflectedForm} = ${match.rule.label} of ${match.lemma.word}`,
+      text: `${match.inflectedForm} = ${match.label} of ${match.lemma.word}`,
     });
     el.addClass("conlang-tooltip-visible");
     this.positionTooltip(x, y);
+  }
+
+  /** Adapt a rule-based InflectionMatch to the shared tooltip shape. */
+  private static toFormBanner(match: InflectionMatch) {
+    return {
+      lemma: match.lemma,
+      label: match.rule.label,
+      inflectedForm: match.inflectedForm,
+    };
   }
 
   /**

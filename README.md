@@ -173,6 +173,9 @@ Only `definition` is required. Supported frontmatter fields:
 | `etymology` | Origin / derivation notes. |
 | `word` | Overrides the filename as the surface form. Needed for phrase entries with spaces, and for homographs — several files can declare the same `word` (see multi-sense entries below). |
 | `parts` | YAML list or comma-separated string of conlang words this compound decomposes into. |
+| `aliases` | Alternate surface forms that resolve to this same entry. |
+| `forms` | Hardcoded inflected forms — a declension or conjugation table for this entry (see below). |
+| `inflectAs` | Extra part(s) of speech to match POS-filtered inflection rules under (see below). |
 | `nameCategory` | For proper nouns: character, place, faction, artifact, event, title, other. |
 
 **Multi-sense entries (homographs):** if a word has genuinely different senses (e.g. English "see" = visual perception vs. understanding), create *separate dictionary entries* — one for each sense. Two files can't share a name, so give each file a distinct name and declare the shared spelling with the `word:` override:
@@ -231,6 +234,48 @@ In Settings → Made Up Words → any language → Inflection rules. Each rule h
 Rules are tried in order. First one whose reconstructed lemma exists in the dictionary wins, so unrelated words won't get false-matched.
 
 **Limitations:** affixation only. No infixes, ablaut, reduplication, or root templates. If your conlang has those, the inflection matcher will miss them — record them in entry notes instead.
+
+### Hardcoded forms (`forms:`)
+
+Rules are pattern-based, and every real language has words that break the pattern. Declare those forms directly on the entry:
+
+```markdown
+---
+definition: water
+partOfSpeech: noun
+forms:
+  - "plural: kalath"
+  - "genitive: kalen"
+  - "dative: kalim, kalum"
+---
+```
+
+- The canonical shape is a YAML list of `"label: form"` strings, because Obsidian's property editor renders a list of text natively. A YAML map (`forms: {plural: kalath}`) and a single comma-separated string also work.
+- Several forms can share a label — `dative: kalim, kalum` declares two datives.
+- A form with no label gets the label *variant*, which behaves like an alias but is honestly labelled.
+
+Declared forms are recognised everywhere a rule-derived form is: hovering one shows *"kalath = plural of kala"*, it highlights, and clicking opens the lemma's note. They're also rendered as a **Declared forms** table in the side panel, and (optionally) in the hover tooltip — toggle that under Settings → Word matching → *Show declared forms in hover tooltip*.
+
+Two priority rules:
+
+- A declared form **beats** whatever an inflection rule would derive. That's the point — an irregular is exactly the case the rules get wrong.
+- Declaring a label **suppresses** the same-named rule for that entry only, so a hardcoded `past: went` won't sit next to a predicted *goed*. Other labels are untouched.
+
+A real headword always outranks another word's declared form, so declaring a form that collides with an existing word won't shadow it.
+
+### Borrowing another part of speech's rules (`inflectAs:`)
+
+If a word inflects like a different part of speech, say so instead of duplicating every rule:
+
+```markdown
+---
+definition: they
+partOfSpeech: pronoun
+inflectAs: noun
+---
+```
+
+This entry now matches rules filtered to `noun` **as well as** rules filtered to `pronoun` — it's additive, so any pronoun-specific rules you already wrote keep working. Comma-separate for more than one (`inflectAs: noun, adjective`).
 
 ---
 

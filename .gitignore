@@ -20,3 +20,7 @@ node_modules/
 # (Earlier versions of this gitignore excluded it, which the Obsidian
 # community plugin review flagged — committing the lockfile ensures
 # dependency resolution is reproducible across environments.)
+
+# Local agent scratch
+.claude/
+issue16-reply.md

@@ -91,6 +91,16 @@ export function glossConlangToEnglish(
       tokens.push({ kind: "dictionary", source: word, candidates: [direct] });
       continue;
     }
+    // Hardcoded forms declared on an entry beat rule-derived ones.
+    const declared = dictionary.lookupForm(word)[0];
+    if (declared) {
+      tokens.push({
+        kind: "inflected",
+        source: word,
+        inflection: { lemma: declared.lemma, label: declared.label },
+      });
+      continue;
+    }
     if (lang) {
       const m = findInflection(word, dictionary, lang.inflections);
       if (m) {

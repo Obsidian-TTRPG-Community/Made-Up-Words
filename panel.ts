@@ -8,7 +8,7 @@
 
 import { ItemView, WorkspaceLeaf, MarkdownView, TFile, Notice } from "obsidian";
 import type ConlangPlugin from "./main";
-import { DictionaryEntry } from "./types";
+import { DictionaryEntry, InflectedForm } from "./types";
 import { applyCypherReverse } from "./cypher";
 import { findInflection, generateInflections, GeneratedForm } from "./inflection";
 import { explainInflection } from "./explanations";
@@ -431,6 +431,21 @@ export class TranslationPanelView extends ItemView {
       // is one phrase. Partial phrase matches fall through to the standard
       // translation view.
       if (phraseMatch && phraseMatch.matchedText.toLowerCase() === trimmed.toLowerCase()) {
+        // A multi-word declared form is indexed as a synthetic phrase entry.
+        // Show the real lemma with a "this is the X form of Y" note rather
+        // than presenting the form itself as a headword.
+        const declaredLemma = this.plugin.dictionary.lemmaForDeclaredPhrase(
+          phraseMatch.entry
+        );
+        if (declaredLemma && phraseMatch.entry.viaFormLabel) {
+          return {
+            entry: declaredLemma,
+            viaInflection: {
+              form: phraseMatch.entry.word,
+              label: phraseMatch.entry.viaFormLabel,
+            },
+          };
+        }
         return { entry: phraseMatch.entry, viaInflection: null };
       }
       return null;
@@ -446,6 +461,16 @@ export class TranslationPanelView extends ItemView {
     const direct = this.plugin.dictionary.lookup(cleaned);
     if (direct) {
       return { entry: direct, viaInflection: null };
+    }
+
+    // Hardcoded form declared on an entry — checked before the rules so a
+    // declared irregular wins over a rule-derived guess.
+    const declared = this.plugin.dictionary.lookupForm(cleaned)[0];
+    if (declared) {
+      return {
+        entry: declared.lemma,
+        viaInflection: { form: cleaned, label: declared.label },
+      };
     }
 
     // Inflected form
@@ -503,6 +528,10 @@ export class TranslationPanelView extends ItemView {
       } else {
         // word token
         entry = this.plugin.dictionary.lookup(t.text);
+        // Hardcoded forms sit between headwords and rule matches here too.
+        if (!entry) {
+          entry = this.plugin.dictionary.lookupForm(t.text)[0]?.lemma;
+        }
         if (!entry && lang) {
           const m = findInflection(t.text, this.plugin.dictionary, lang.inflections);
           if (m) entry = m.lemma;
@@ -619,12 +648,22 @@ export class TranslationPanelView extends ItemView {
       this.renderPartsDecomposition(entry.parts);
     }
 
+    // === Declared forms (the entry's own `forms:` property) ===
+    // Rendered before predicted forms because they're authoritative: the user
+    // wrote them by hand precisely because the rules get them wrong.
+    if (entry.forms && entry.forms.length > 0) {
+      this.renderDeclaredForms(entry.forms);
+    }
+
     // === Generated forms ===
     const generated: GeneratedForm[] = lang
       ? generateInflections(entry, lang.inflections)
       : [];
 
     if (generated.length === 0) {
+      // Don't nag about missing rules when the entry declares its own forms —
+      // that's a complete, deliberate answer, not a gap to fill.
+      if (entry.forms && entry.forms.length > 0) return;
       const empty = this.entriesEl.createDiv({ cls: "conlang-forms-empty" });
       if (!entry.partOfSpeech) {
         empty.setText(
@@ -677,6 +716,46 @@ export class TranslationPanelView extends ItemView {
     const hint = this.entriesEl.createDiv({ cls: "conlang-forms-hint" });
     hint.setText(
       "Forms are predicted from your inflection rules. Hover any of them in a note to see this entry."
+    );
+  }
+
+  /**
+   * Render the entry's hardcoded `forms:` as a declension/conjugation table
+   * (issues #10 and #15). Grouped by label so several forms sharing a label
+   * ("dative: kalim, kalum") sit on one row, matching how predicted forms are
+   * grouped directly below.
+   */
+  private renderDeclaredForms(forms: InflectedForm[]) {
+    const section = this.entriesEl.createDiv({ cls: "conlang-declared-section" });
+    const header = section.createDiv({ cls: "conlang-panel-section-header" });
+    header.setText("Declared forms");
+
+    const groups = new Map<string, string[]>();
+    for (const f of forms) {
+      const list = groups.get(f.label) ?? [];
+      list.push(f.form);
+      groups.set(f.label, list);
+    }
+
+    const list = section.createDiv({ cls: "conlang-forms-list is-declared" });
+    for (const [label, values] of groups) {
+      const row = list.createDiv({ cls: "conlang-form-row" });
+      const labelEl = row.createDiv({ cls: "conlang-form-label" });
+      labelEl.setText(label);
+      const explanation = explainInflection(label);
+      if (explanation) {
+        labelEl.title = explanation;
+        labelEl.addClass("has-explanation");
+      }
+      const valuesEl = row.createDiv({ cls: "conlang-form-values" });
+      for (const v of values) {
+        valuesEl.createSpan({ cls: "conlang-form-value is-declared", text: v });
+      }
+    }
+
+    const hint = section.createDiv({ cls: "conlang-forms-hint" });
+    hint.setText(
+      "Set by this entry's `forms:` property. A declared label replaces the same-named rule's prediction for this entry."
     );
   }
 

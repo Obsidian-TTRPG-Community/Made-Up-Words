@@ -6,6 +6,53 @@ This project is pre-1.0. Expect rough edges and occasional breaking changes to
 settings or data formats. Where a change affects existing data, migration is
 handled automatically on load.
 
+## [0.20.0] - Hardcoded inflections & form tables
+
+_Resolves [#10](https://github.com/Obsidian-TTRPG-Community/Made-Up-Words/issues/10)
+and [#15](https://github.com/Obsidian-TTRPG-Community/Made-Up-Words/issues/15)._
+
+### Added
+- **Hardcoded inflected forms (`forms:`).** An entry can now declare its own
+  irregular forms in frontmatter as a list of `"label: form"` strings, e.g.
+  `- "plural: kalath"`. Declared forms are recognised everywhere rule-derived
+  forms are — hover shows "kalath = plural of kala", they highlight, and
+  clicking opens the lemma's note. Several forms can share a label
+  (`"dative: kalim, kalum"`), and multi-word forms are matched by the phrase
+  matcher. A declared form takes priority over anything the inflection rules
+  would derive, and declaring a label suppresses the same-named rule for that
+  entry only — so a hardcoded `past: went` no longer sits beside a predicted
+  *goed*. ([#10], [#15])
+- **Declension/conjugation tables in the UI.** Declared forms render as a
+  **Declared forms** section in the side panel's word details, and as a compact
+  line in the hover tooltip (capped at 8 forms, then "+N more"). A new
+  *Word matching → Show declared forms in hover tooltip* setting turns the
+  tooltip half off for people who keep tooltips minimal; the panel always shows
+  them. ([#15])
+- **`inflectAs:` — borrow another part of speech's rules.** An entry tagged
+  `partOfSpeech: pronoun` can set `inflectAs: noun` and will then match
+  POS-filtered rules for *both*. Additive rather than replacing, so existing
+  pronoun-specific rules keep firing. This removes the need to duplicate a
+  large rule set just to cover a word class that inflects like another —
+  the case that prompted the issue, at 184 rules. ([#10])
+
+### Changed
+- **Lookup results list hardcoded forms above rule matches**, and no longer
+  shows the same lemma twice when both routes resolve to it.
+- **README** documents `forms:`, `inflectAs:`, and `aliases:` in the frontmatter
+  table, with a worked example of each.
+
+### Fixed
+- **Hover tooltip now shows the source language.** The single-word dictionary
+  tooltip (and the inflected-form tooltip) previously never rendered the
+  entry's language — only the multi-sense cross-language tooltip did. The
+  language name is now shown after the headword whenever more than one language
+  is active, matching the existing multi-sense behaviour. Single-language
+  vaults are unchanged (no language label, to avoid noise). _(Prepared as
+  0.19.1, which was never released; it ships here instead.)_
+
+[#10]: https://github.com/Obsidian-TTRPG-Community/Made-Up-Words/issues/10
+[#15]: https://github.com/Obsidian-TTRPG-Community/Made-Up-Words/issues/15
+
 ## [0.19.0] - Homograph (multi-sense) entries
 
 _Resolves [#11](https://github.com/Obsidian-TTRPG-Community/Made-Up-Words/issues/11)._

@@ -276,6 +276,20 @@ export class ConlangSettingTab extends PluginSettingTab {
           this.plugin.refreshHighlights();
         })
       );
+
+    new Setting(containerEl)
+      .setName("Show declared forms in hover tooltip")
+      .setDesc(
+        "Include an entry's hardcoded `forms:` (its declension or conjugation table) " +
+          "in the hover tooltip. The side panel always shows them. Turn this off to " +
+          "keep tooltips compact when your entries carry long form tables."
+      )
+      .addToggle((tg) =>
+        tg.setValue(this.plugin.settings.showFormsInTooltip).onChange(async (v) => {
+          this.plugin.settings.showFormsInTooltip = v;
+          await this.plugin.saveSettings();
+        })
+      );
   }
 
   private renderTranslationSection(containerEl: HTMLElement): void {

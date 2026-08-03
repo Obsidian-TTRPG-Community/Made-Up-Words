@@ -684,6 +684,47 @@
   color: var(--text-muted);
 }
 
+/* Declared forms (`forms:` frontmatter) shown inside a hover tooltip as a
+   compact wrapped row: LABEL value · LABEL value. Capped in JS at 8 items so
+   a full declension can't grow a tooltip past the text underneath it. */
+.conlang-tooltip-forms {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 6px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--background-modifier-border, rgba(128, 128, 128, 0.25));
+  font-size: 0.85em;
+}
+
+.conlang-tooltip-form {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.conlang-tooltip-form-label {
+  text-transform: uppercase;
+  font-size: 0.85em;
+  letter-spacing: 0.04em;
+  color: var(--text-faint, #888);
+}
+
+.conlang-tooltip-form-value {
+  font-family: var(--font-monospace);
+  color: var(--text-accent, #a882ff);
+}
+
+.conlang-tooltip-form-sep {
+  color: var(--text-faint, #888);
+}
+
+.conlang-tooltip-form-more {
+  color: var(--text-faint, #888);
+  font-style: italic;
+}
+
 .conlang-tooltip-cypher {
   display: flex;
   align-items: center;
@@ -1349,6 +1390,20 @@
   font-weight: 500;
   font-family: var(--font-monospace);
   font-size: 0.95em;
+}
+
+/* Declared forms in the side panel. Marked with an accent edge so it reads as
+   authoritative next to the "Predicted forms" list below it. */
+.conlang-declared-section {
+  margin-top: 8px;
+}
+
+.conlang-forms-list.is-declared .conlang-form-row {
+  border-left: 3px solid var(--text-accent, #a882ff);
+}
+
+.conlang-form-value.is-declared {
+  font-weight: 600;
 }
 
 .conlang-forms-hint {

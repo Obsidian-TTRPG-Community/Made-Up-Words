@@ -80,6 +80,8 @@ function computeClassifyWord(
   if (s.highlightConlang) {
     // Direct headword match in any active language.
     if (plugin.dictionary.lookupAll(cleaned).length > 0) return "conlang";
+    // Hardcoded inflected form declared on an entry (`forms:` frontmatter).
+    if (plugin.dictionary.lookupForm(cleaned).length > 0) return "conlang";
     // Inflected form that resolves to a headword via this language's rules.
     for (const lang of plugin.getActiveLanguages()) {
       if (findInflection(cleaned, plugin.dictionary, lang.inflections)) {
@@ -150,6 +152,8 @@ function resolveEntryPath(
   }
   const direct = plugin.dictionary.lookupAll(cleaned)[0];
   if (direct) return direct.path;
+  const declared = plugin.dictionary.lookupForm(cleaned)[0];
+  if (declared) return declared.lemma.path;
   for (const lang of plugin.getActiveLanguages()) {
     const infl = findInflection(cleaned, plugin.dictionary, lang.inflections);
     if (infl) return infl.lemma.path;

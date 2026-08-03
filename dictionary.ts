@@ -11,6 +11,10 @@
 //   etymology: from proto-form *kal-
 //   language: Example
 //   aliases: Feb, Febr        # optional: alternate forms that resolve here
+//   inflectAs: noun           # optional: also match rules filtered to this POS
+//   forms:                    # optional: hardcoded irregular forms
+//     - "plural: kalath"
+//     - "genitive: kalen"
 //   ---
 //
 // Body of the note can contain freeform usage notes; we include it as `notes`.
@@ -18,18 +22,32 @@
 import { App, TFile, TFolder, CachedMetadata } from "obsidian";
 import { DictionaryEntry } from "./types";
 import { extractBodyPreview as _extractBodyPreview } from "./body-preview";
-import { parseStringList } from "./word-tokens";
+import { parseStringList, parseInflectedForms } from "./word-tokens";
 import {
   buildPhraseIndex,
   EMPTY_PHRASE_INDEX,
   PhraseIndex,
 } from "./phrases";
 
+/**
+ * A hit from the declared-forms index: which entry the surface form belongs
+ * to, and what grammatical label was declared for it.
+ */
+export interface FormMatch {
+  lemma: DictionaryEntry;
+  label: string;
+}
+
 export class Dictionary {
   // Conlang lookup: multiple entries possible when multiple languages
   // are active and they share a spelling (e.g. "kala" in two languages).
   private byWord: Map<string, DictionaryEntry[]> = new Map();
   private byEnglish: Map<string, DictionaryEntry[]> = new Map(); // lowercase english -> entries
+  // Hardcoded inflected forms declared via the `forms:` frontmatter property.
+  // Kept OUT of byWord deliberately: a declared form is not a headword, and
+  // merging the two would make hover render "kalath" as its own entry instead
+  // of "the plural of kala".
+  private byForm: Map<string, FormMatch[]> = new Map();
   // Phrase entries sorted by word count descending. The matcher walks this
   // list to try longer phrases first, so "good morning" beats "good".
   private phrases: DictionaryEntry[] = [];
@@ -66,6 +84,7 @@ export class Dictionary {
   clear() {
     this.byWord.clear();
     this.byEnglish.clear();
+    this.byForm.clear();
     this.phrases = [];
     this.phraseIdx = EMPTY_PHRASE_INDEX;
     this.all = [];
@@ -86,6 +105,32 @@ export class Dictionary {
    */
   lookupAll(conlangWord: string): DictionaryEntry[] {
     return this.byWord.get(this.norm(conlangWord)) ?? [];
+  }
+
+  /**
+   * Look up a surface form in the declared-forms index (`forms:` frontmatter).
+   * Returns every entry that declares this form, with the label it was given.
+   *
+   * Callers should try `lookup`/`lookupAll` first — a real headword outranks
+   * another word's inflected form — and `findInflection` after, so that a
+   * hardcoded irregular beats whatever the rules would have derived.
+   */
+  lookupForm(surfaceForm: string): FormMatch[] {
+    return this.byForm.get(this.norm(surfaceForm)) ?? [];
+  }
+
+  /**
+   * Given a phrase-index hit, resolve the real lemma entry behind it if the
+   * hit is a synthetic entry standing in for a multi-word declared form.
+   * Returns undefined for ordinary phrase entries.
+   *
+   * The synthetic copies carry the lemma's `path`, which is what makes this
+   * recoverable — without it a multi-word form would render as a headword in
+   * its own right, complete with the lemma's definition under the wrong word.
+   */
+  lemmaForDeclaredPhrase(entry: DictionaryEntry): DictionaryEntry | undefined {
+    if (!entry.viaFormLabel || !entry.viaFormLemma) return undefined;
+    return this.lookupAll(entry.viaFormLemma).find((e) => e.path === entry.path);
   }
 
   /**
@@ -249,6 +294,14 @@ export class Dictionary {
     const parts = parseStringList(fm.parts);
     const aliases = parseStringList(fm.aliases);
 
+    // Hardcoded inflections (issue #10) and the POS override that lets an
+    // entry borrow another part of speech's rules.
+    const forms = parseInflectedForms(fm.forms ?? fm.inflections);
+    // Accept a YAML list as well as a comma-separated string — Obsidian's
+    // property editor creates list-type properties by default, so a
+    // `- noun` / `- verb` list is at least as likely as "noun, verb".
+    const inflectAs = parseStringList(fm.inflectAs)?.join(",");
+
     return {
       word,
       definition,
@@ -264,6 +317,8 @@ export class Dictionary {
       wordCount,
       parts,
       aliases,
+      forms,
+      inflectAs,
     };
   }
 
@@ -297,6 +352,33 @@ export class Dictionary {
         }
       }
     }
+    // Index hardcoded inflected forms. These go in their own map rather than
+    // byWord so hover can say "plural of kala" instead of treating the form as
+    // a headword in its own right.
+    if (entry.forms) {
+      for (const { label, form } of entry.forms) {
+        const formKey = this.norm(form);
+        // A form identical to its own headword declares nothing.
+        if (!formKey || formKey === key) continue;
+        const list = this.byForm.get(formKey) ?? [];
+        list.push({ lemma: entry, label });
+        this.byForm.set(formKey, list);
+        // Multi-word forms need the phrase matcher to see them, exactly as
+        // multi-word aliases do. The synthetic copy carries the label so the
+        // phrase tooltip can still explain what it is.
+        if (/\s/.test(form)) {
+          this.phrases.push({
+            ...entry,
+            word: form,
+            isPhrase: true,
+            wordCount: form.split(/\s+/).filter((w) => w.length > 0).length,
+            viaFormLabel: label,
+            viaFormLemma: entry.word,
+          });
+        }
+      }
+    }
+
     // Index English definition: split on commas/semicolons so "water, liquid"
     // becomes two lookups.
     const englishKeys = entry.definition
@@ -313,13 +395,29 @@ export class Dictionary {
   /**
    * Render an entry into a hover tooltip element using safe DOM construction.
    * Inline parts are separated by spaces to match the previous layout.
+   *
+   * When `showLanguage` is true, the entry's source language is shown after the
+   * headword. Callers set this only when more than one language is active, so
+   * single-language vaults stay uncluttered (matches the multi-sense tooltip).
    */
-  static renderTooltip(entry: DictionaryEntry, parent: HTMLElement): void {
+  static renderTooltip(
+    entry: DictionaryEntry,
+    parent: HTMLElement,
+    showLanguage = false,
+    showForms = true
+  ): void {
     const sep = () => {
       if (parent.childNodes.length > 0) parent.appendText(" ");
     };
     sep();
     parent.createEl("strong", { text: entry.word });
+    if (showLanguage && entry.language) {
+      sep();
+      parent.createSpan({
+        cls: "conlang-tooltip-lang",
+        text: entry.language,
+      });
+    }
     if (entry.aliases && entry.aliases.length > 0) {
       sep();
       parent.createSpan({
@@ -357,6 +455,41 @@ export class Dictionary {
       parent.createDiv({
         cls: "conlang-tooltip-etym",
         text: `Etymology: ${entry.etymology}`,
+      });
+    }
+    // Declared forms (the `forms:` property). Capped, because a full noun
+    // declension can run to a dozen rows and a tooltip that tall covers the
+    // text the user is trying to read.
+    if (showForms && entry.forms && entry.forms.length > 0) {
+      sep();
+      Dictionary.renderFormsLine(entry.forms, parent);
+    }
+  }
+
+  /** Maximum declared forms shown in a hover tooltip before summarising. */
+  private static readonly TOOLTIP_FORM_LIMIT = 8;
+
+  /**
+   * Render an entry's declared forms as a compact one-line table inside a
+   * tooltip: `plural kalath · genitive kalen`.
+   */
+  private static renderFormsLine(
+    forms: { label: string; form: string }[],
+    parent: HTMLElement
+  ): void {
+    const box = parent.createDiv({ cls: "conlang-tooltip-forms" });
+    const shown = forms.slice(0, Dictionary.TOOLTIP_FORM_LIMIT);
+    shown.forEach((f, i) => {
+      if (i > 0) box.createSpan({ cls: "conlang-tooltip-form-sep", text: "·" });
+      const item = box.createSpan({ cls: "conlang-tooltip-form" });
+      item.createSpan({ cls: "conlang-tooltip-form-label", text: f.label });
+      item.createSpan({ cls: "conlang-tooltip-form-value", text: f.form });
+    });
+    const hidden = forms.length - shown.length;
+    if (hidden > 0) {
+      box.createSpan({
+        cls: "conlang-tooltip-form-more",
+        text: `+${hidden} more`,
       });
     }
   }

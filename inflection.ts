@@ -46,7 +46,7 @@ export function findInflection(
 
     // If the rule has a POS filter, the lemma must match one of the allowed
     // parts of speech. Rules with no POS filter apply to any entry.
-    if (!posMatches(rule.pos, entry.partOfSpeech)) continue;
+    if (!posMatches(rule.pos, entry)) continue;
 
     return { lemma: entry, rule, inflectedForm: word };
   }
@@ -54,18 +54,46 @@ export function findInflection(
 }
 
 /**
- * True if a rule's POS filter accepts the entry's POS.
- * - No filter (empty/undefined) -> always accepts
- * - Filter "noun" -> entry must be exactly "noun"
- * - Filter "noun,proper-noun" -> entry must be one of those
- * - Filter "noun" but entry has no POS -> rejects (filter is strict)
+ * Every part of speech an entry should be matched under. That's its declared
+ * `partOfSpeech`, plus anything in `inflectAs` (comma-separable).
+ *
+ * `inflectAs` is ADDITIVE rather than replacing: a pronoun with
+ * `inflectAs: noun` still matches `pos: pronoun` rules. A replacing semantic
+ * would silently disable a user's pronoun-specific rules the moment they
+ * borrowed the noun ones — the opposite of what issue #10 asked for.
  */
-function posMatches(filter: string | undefined, entryPos: string | undefined): boolean {
+function effectivePos(entry: {
+  partOfSpeech?: string;
+  inflectAs?: string;
+}): string[] {
+  const out: string[] = [];
+  if (entry.partOfSpeech) out.push(entry.partOfSpeech.trim().toLowerCase());
+  if (entry.inflectAs) {
+    for (const p of entry.inflectAs.split(",")) {
+      const v = p.trim().toLowerCase();
+      if (v) out.push(v);
+    }
+  }
+  return out.filter((v) => v.length > 0);
+}
+
+/**
+ * True if a rule's POS filter accepts the entry.
+ * - No filter (empty/undefined) -> always accepts
+ * - Filter "noun" -> entry must be a noun (by partOfSpeech OR inflectAs)
+ * - Filter "noun,proper-noun" -> entry must be one of those
+ * - Filter "noun" but entry has no POS at all -> rejects (filter is strict)
+ */
+function posMatches(
+  filter: string | undefined,
+  entry: { partOfSpeech?: string; inflectAs?: string }
+): boolean {
   if (!filter || filter.trim() === "") return true;
-  if (!entryPos) return false;
+  const entryPos = effectivePos(entry);
+  if (entryPos.length === 0) return false;
   const allowed = filter.split(",").map((s) => s.trim().toLowerCase()).filter((s) => s);
   if (allowed.length === 0) return true;
-  return allowed.includes(entryPos.toLowerCase());
+  return allowed.some((a) => entryPos.includes(a));
 }
 
 function tryRule(word: string, rule: InflectionRule): string | null {
@@ -125,12 +153,21 @@ export function generateInflections(
   const out: GeneratedForm[] = [];
   const word = lemma.word.toLowerCase();
 
+  // Labels the entry declares by hand (issue #10). A declared irregular
+  // supersedes the rule for that category, so we don't predict "goed"
+  // alongside a hardcoded "went". Other categories are unaffected —
+  // declaring a plural leaves the genitive rule free to fire.
+  const declared = new Set(
+    (lemma.forms ?? []).map((f) => f.label.trim().toLowerCase())
+  );
+
   for (const rule of rules) {
     if (!rule.enabled) continue;
     if (!rule.pattern) continue;
+    if (declared.has(rule.label.trim().toLowerCase())) continue;
 
     // Skip rules whose POS filter doesn't accept this lemma's POS
-    if (!posMatches(rule.pos, lemma.partOfSpeech)) continue;
+    if (!posMatches(rule.pos, lemma)) continue;
 
     const generated = applyRuleForward(word, rule);
     if (!generated) continue;

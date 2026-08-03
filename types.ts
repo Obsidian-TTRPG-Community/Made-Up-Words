@@ -15,6 +15,22 @@ export interface CypherSheet {
   rules: CypherRule[];
 }
 
+/**
+ * A hardcoded inflected form declared on an entry via the `forms:` frontmatter
+ * property, e.g. `plural: kalath`. Declared forms take priority over anything
+ * the inflection rules would derive, which is the point — they exist for
+ * irregulars the rules get wrong.
+ */
+export interface InflectedForm {
+  // The grammatical category, e.g. "plural", "genitive", "past". Free-form;
+  // reused as the tooltip label and as the key that suppresses a same-named
+  // rule in forward generation.
+  label: string;
+  // The surface form itself. May contain spaces (it's then also registered
+  // with the phrase matcher).
+  form: string;
+}
+
 export interface DictionaryEntry {
   // The conlang form (the key in the dictionary). For phrase entries this
   // can contain spaces — set via frontmatter `word:` to override the filename.
@@ -53,6 +69,20 @@ export interface DictionaryEntry {
   // highlighting treat "Feb" exactly like "February". Multi-word aliases are
   // supported too (they're matched like phrases).
   aliases?: string[];
+  // Optional: hardcoded inflected forms declared on the entry itself, for
+  // irregulars the rules can't derive. Recognised in preference to
+  // rule-derived forms, and a declared label suppresses same-labelled rules
+  // when predicting forms for this entry.
+  forms?: InflectedForm[];
+  // Optional: additional part(s) of speech to use when matching POS-filtered
+  // inflection rules. Additive — the entry's real partOfSpeech still matches.
+  // Lets a `pronoun` inflect by the `noun` rules without duplicating them.
+  inflectAs?: string;
+  // Set on the synthetic entries pushed into the phrase index for a multi-word
+  // declared form: the label of the form ("plural") and the lemma's headword.
+  // Absent on real entries.
+  viaFormLabel?: string;
+  viaFormLemma?: string;
 }
 
 export interface InflectionRule {
@@ -142,6 +172,11 @@ export interface ConlangSettings {
   // like "Sol" coexist with a common noun "sol". English-direction lookups
   // stay case-insensitive. Default false (the long-standing behaviour).
   caseSensitiveMatching: boolean;
+  // === Declared forms (v0.20) ===
+  // Show an entry's hardcoded `forms:` (declension/conjugation table) in the
+  // hover tooltip. The side panel always shows them; this only controls the
+  // tooltip, which some users keep deliberately minimal.
+  showFormsInTooltip: boolean;
 }
 
 export const DEFAULT_SETTINGS: ConlangSettings = {
@@ -200,4 +235,5 @@ export const DEFAULT_SETTINGS: ConlangSettings = {
   highlightConlang: true,
   highlightEnglish: true,
   caseSensitiveMatching: false,
+  showFormsInTooltip: true,
 };

@@ -68,6 +68,97 @@ export function firstSense(definition: string): string {
 
 
 /**
+ * Default label used when a declared form arrives with no `label:` prefix.
+ * Keeps a bare list (`forms: [kalath, kalen]`) usable — it degrades to
+ * alias-like behaviour, but honestly labelled rather than silently unlabelled.
+ */
+export const DEFAULT_FORM_LABEL = "variant";
+
+/**
+ * Parse the `forms:` frontmatter property into label/form pairs.
+ *
+ * The canonical shape is a YAML list of "label: form" strings, because
+ * Obsidian's Properties editor renders a list-of-text natively but shows
+ * nested objects as an unsupported type:
+ *
+ *   forms:
+ *     - "plural: kalath"
+ *     - "genitive: kalen"
+ *     - "dative: kalim, kalum"     # two forms sharing one label
+ *
+ * For tolerance we also accept a YAML map (`{plural: kalath}`), a list of
+ * single-key maps (`- plural: kalath`), and one comma-separated string.
+ *
+ * Within a string, commas separate forms and the FIRST colon separates label
+ * from form. A comma-separated piece with no colon inherits the preceding
+ * label, so "dative: kalim, kalum" yields two dative forms rather than one
+ * dative and one mystery.
+ */
+export function parseInflectedForms(
+  value: unknown
+): { label: string; form: string }[] | undefined {
+  const out: { label: string; form: string }[] = [];
+
+  // Collapse internal whitespace runs. The phrase index tokenises on /\s+/,
+  // so "big  house" written with two spaces has to be stored the same way the
+  // matcher will see it or the two indexes disagree about the same form.
+  const tidy = (s: string) => s.trim().replace(/\s+/g, " ");
+
+  const pushFromString = (raw: string) => {
+    let label = DEFAULT_FORM_LABEL;
+    for (const piece of raw.split(",")) {
+      const chunk = piece.trim();
+      if (!chunk) continue;
+      const colon = chunk.indexOf(":");
+      if (colon >= 0) {
+        const l = tidy(chunk.slice(0, colon));
+        const f = tidy(chunk.slice(colon + 1));
+        // A label with no form ("plural:") declares nothing — drop it, but
+        // remember the label so a following bare piece attaches to it.
+        if (l) label = l;
+        if (f) out.push({ label, form: f });
+      } else {
+        out.push({ label, form: tidy(chunk) });
+      }
+    }
+  };
+
+  const pushFromRecord = (obj: Record<string, unknown>) => {
+    for (const [k, v] of Object.entries(obj)) {
+      const label = tidy(k);
+      if (!label) continue;
+      const values = Array.isArray(v) ? v : [v];
+      for (const item of values) {
+        if (item === null || item === undefined) continue;
+        // The value may itself be comma-separated ("kalim, kalum").
+        for (const f of String(item).split(",")) {
+          const form = tidy(f);
+          if (form) out.push({ label, form });
+        }
+      }
+    }
+  };
+
+  const isRecord = (v: unknown): v is Record<string, unknown> =>
+    typeof v === "object" && v !== null && !Array.isArray(v);
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      if (isRecord(item)) pushFromRecord(item);
+      else if (item !== null && item !== undefined) pushFromString(String(item));
+    }
+  } else if (isRecord(value)) {
+    pushFromRecord(value);
+  } else if (typeof value === "string" && value.trim()) {
+    pushFromString(value);
+  } else {
+    return undefined;
+  }
+
+  return out.length > 0 ? out : undefined;
+}
+
+/**
  * Parse a frontmatter field that may be a YAML list or a comma-separated
  * string into a clean string array. Trims entries and drops blanks. Returns
  * undefined when there's nothing usable. Shared by the `parts` and `aliases`
