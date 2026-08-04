@@ -79,6 +79,8 @@ var DEFAULT_SETTINGS = {
   primaryLanguage: "Example",
   commitWrapper: "html-tooltip",
   hoverModifier: "shift",
+  hoverConlang: true,
+  hoverEnglish: true,
   hoverFallback: "cypher",
   highlightKnownWords: true,
   highlightStyle: "underline",
@@ -1148,12 +1150,30 @@ var ConlangSettingTab = class extends import_obsidian2.PluginSettingTab {
         await this.plugin.saveSettings();
       });
     });
+    new import_obsidian2.Setting(containerEl).setName("Show your words' meanings").setDesc(
+      "Hovering one of your made-up words shows its dictionary entry. Covers headwords, phrases, declared forms, and inflected forms."
+    ).addToggle(
+      (tg) => tg.setValue(this.plugin.settings.hoverConlang).onChange(async (v) => {
+        this.plugin.settings.hoverConlang = v;
+        await this.plugin.saveSettings();
+      })
+    );
+    new import_obsidian2.Setting(containerEl).setName("Show English to conlang translations").setDesc(
+      "Hovering an English word shows the conlang words that mean it. Turn this off if your made-up words are being mistaken for English. It also switches off the cypher preview below, which transforms hovered text the same way. A word that's already one of your headwords is never treated as English, whichever way this is set."
+    ).addToggle(
+      (tg) => tg.setValue(this.plugin.settings.hoverEnglish).onChange(async (v) => {
+        this.plugin.settings.hoverEnglish = v;
+        await this.plugin.saveSettings();
+        this.rerender();
+      })
+    );
     new import_obsidian2.Setting(containerEl).setName("Fallback for unknown words").setDesc(
-      "What to show when you hover a word that isn't in the dictionary. 'Cypher preview' shows a phonological placeholder; 'Nothing' shows no tooltip."
+      "What to show when you hover a word that isn't in the dictionary. 'Cypher preview' shows a phonological placeholder; 'Nothing' shows no tooltip. The cypher preview is an English to conlang transformation, so this only applies while that direction is on."
     ).addDropdown((dd) => {
       dd.addOption("cypher", "Cypher preview");
       dd.addOption("nothing", "Nothing");
       dd.setValue(this.plugin.settings.hoverFallback);
+      dd.setDisabled(!this.plugin.settings.hoverEnglish);
       dd.onChange(async (value) => {
         this.plugin.settings.hoverFallback = value;
         await this.plugin.saveSettings();
@@ -5033,7 +5053,12 @@ var _ConlangPlugin = class _ConlangPlugin extends import_obsidian9.Plugin {
    * single boolean check instead of scanning languages on every event.
    */
   updateHoverActive() {
-    this.hoverActive = this.getActiveLanguages().some((l) => l.hoverEnabled);
+    const anyDirection = this.settings.hoverConlang || this.settings.hoverEnglish;
+    this.hoverActive = anyDirection && this.getActiveLanguages().some((l) => l.hoverEnabled);
+    if (!this.hoverActive) {
+      this.hideTooltip();
+      this.lastHoverWord = null;
+    }
   }
   /**
    * Throttled entry point for mousemove. Resolving the word under the cursor
@@ -5099,7 +5124,7 @@ var _ConlangPlugin = class _ConlangPlugin extends import_obsidian9.Plugin {
       return;
     }
     this.lastHoverWord = cleaned;
-    const phrases = this.dictionary.phraseIndex();
+    const phrases = this.settings.hoverConlang ? this.dictionary.phraseIndex() : EMPTY_PHRASE_INDEX;
     if (phrases.size > 0) {
       const phraseHit = this.findPhraseAroundCursor(ctx, phrases);
       if (phraseHit) {
@@ -5107,17 +5132,35 @@ var _ConlangPlugin = class _ConlangPlugin extends import_obsidian9.Plugin {
         return;
       }
     }
-    const dictEntries = this.dictionary.lookupAll(cleaned);
-    const englishHits = this.dictionary.lookupEnglish(cleaned);
+    const conlangSide = this.settings.hoverConlang;
+    const dictEntries = conlangSide ? this.dictionary.lookupAll(cleaned) : [];
+    let declaredForm;
+    let inflectionMatch = null;
+    if (conlangSide && dictEntries.length === 0) {
+      declaredForm = this.dictionary.lookupForm(cleaned)[0];
+      if (!declaredForm) {
+        for (const activeLang of this.getActiveLanguages()) {
+          inflectionMatch = findInflection(
+            cleaned,
+            this.dictionary,
+            activeLang.inflections
+          );
+          if (inflectionMatch) break;
+        }
+      }
+    }
+    const conlangMatched = dictEntries.length > 0 || declaredForm !== void 0 || inflectionMatch !== null;
+    const englishHits = this.settings.hoverEnglish && !conlangMatched ? this.dictionary.lookupEnglish(cleaned) : [];
     const combined = [...dictEntries];
     for (const e of englishHits) {
       if (!combined.some((c) => c.path === e.path)) combined.push(e);
     }
+    const selfKey = cleaned.toLowerCase();
     const seenDefs = /* @__PURE__ */ new Set();
     for (const e of [...combined]) {
       for (const sense of e.definition.split(/[,;]/)) {
         const key = sense.trim().toLowerCase();
-        if (!key || seenDefs.has(key)) continue;
+        if (!key || key === selfKey || seenDefs.has(key)) continue;
         seenDefs.add(key);
         for (const sib of this.dictionary.lookupEnglish(key)) {
           if (!combined.some((c) => c.path === sib.path)) combined.push(sib);
@@ -5132,7 +5175,6 @@ var _ConlangPlugin = class _ConlangPlugin extends import_obsidian9.Plugin {
       this.showMultiSenseTooltip(evt.clientX, evt.clientY, cleaned, combined);
       return;
     }
-    const declaredForm = this.dictionary.lookupForm(cleaned)[0];
     if (declaredForm) {
       this.showInflectionTooltip(evt.clientX, evt.clientY, {
         lemma: declaredForm.lemma,
@@ -5141,19 +5183,15 @@ var _ConlangPlugin = class _ConlangPlugin extends import_obsidian9.Plugin {
       });
       return;
     }
-    const activeLanguages = this.getActiveLanguages();
-    for (const activeLang of activeLanguages) {
-      const inflectionMatch = findInflection(cleaned, this.dictionary, activeLang.inflections);
-      if (inflectionMatch) {
-        this.showInflectionTooltip(
-          evt.clientX,
-          evt.clientY,
-          _ConlangPlugin.toFormBanner(inflectionMatch)
-        );
-        return;
-      }
+    if (inflectionMatch) {
+      this.showInflectionTooltip(
+        evt.clientX,
+        evt.clientY,
+        _ConlangPlugin.toFormBanner(inflectionMatch)
+      );
+      return;
     }
-    if (this.settings.hoverFallback === "nothing") {
+    if (!this.settings.hoverEnglish || this.settings.hoverFallback === "nothing") {
       this.scheduleHideTooltip();
       return;
     }

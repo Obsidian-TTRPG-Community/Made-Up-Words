@@ -197,15 +197,49 @@ export class ConlangSettingTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
+      .setName("Show your words' meanings")
+      .setDesc(
+        "Hovering one of your made-up words shows its dictionary entry. Covers " +
+          "headwords, phrases, declared forms, and inflected forms."
+      )
+      .addToggle((tg) =>
+        tg.setValue(this.plugin.settings.hoverConlang).onChange(async (v) => {
+          this.plugin.settings.hoverConlang = v;
+          await this.plugin.saveSettings();
+        })
+      );
+
+    new Setting(containerEl)
+      .setName("Show English to conlang translations")
+      .setDesc(
+        "Hovering an English word shows the conlang words that mean it. Turn " +
+          "this off if your made-up words are being mistaken for English. It " +
+          "also switches off the cypher preview below, which transforms hovered " +
+          "text the same way. A word that's already one of your headwords is " +
+          "never treated as English, whichever way this is set."
+      )
+      .addToggle((tg) =>
+        tg.setValue(this.plugin.settings.hoverEnglish).onChange(async (v) => {
+          this.plugin.settings.hoverEnglish = v;
+          await this.plugin.saveSettings();
+          // Redraw so the fallback dropdown below enables/disables with it.
+          this.rerender();
+        })
+      );
+
+    new Setting(containerEl)
       .setName("Fallback for unknown words")
       .setDesc(
         "What to show when you hover a word that isn't in the dictionary. " +
-          "'Cypher preview' shows a phonological placeholder; 'Nothing' shows no tooltip."
+          "'Cypher preview' shows a phonological placeholder; 'Nothing' shows no tooltip. " +
+          "The cypher preview is an English to conlang transformation, so this " +
+          "only applies while that direction is on."
       )
       .addDropdown((dd) => {
         dd.addOption("cypher", "Cypher preview");
         dd.addOption("nothing", "Nothing");
         dd.setValue(this.plugin.settings.hoverFallback);
+        dd.setDisabled(!this.plugin.settings.hoverEnglish);
         dd.onChange(async (value) => {
           this.plugin.settings.hoverFallback =
             value as ConlangSettings["hoverFallback"];

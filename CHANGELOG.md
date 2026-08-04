@@ -6,6 +6,45 @@ This project is pre-1.0. Expect rough edges and occasional breaking changes to
 settings or data formats. Where a change affects existing data, migration is
 handled automatically on load.
 
+## [0.21.0] - Hover direction control
+
+_Resolves [#12](https://github.com/Obsidian-TTRPG-Community/Made-Up-Words/issues/12)._
+
+### Fixed
+- **Your conlang now wins over English on hover.** Hover used to run both
+  directions and merge the results, so a word that was both one of your
+  headwords *and* some other entry's English definition produced a tooltip
+  mixing "what your word means" with "how to say this English word" — the
+  confusion reported in the issue. The conlang side is now resolved first
+  (headword → declared form → inflected form) and, when any of those match, the
+  English direction is not consulted at all. This is the order highlighting has
+  always used; hover just never matched it. ([#12])
+- **Cross-language sibling lookup no longer loops back to the hovered word.**
+  An entry whose definition repeats its own headword or alias (common for
+  loanwords and for proper nouns entered with the same form and referent) could
+  re-introduce the English-direction hits that were just suppressed. ([#12])
+
+### Added
+- **Hover direction toggles.** Two new switches under *Settings → Hover
+  tooltips*, mirroring the existing highlight settings:
+  - *Show your words' meanings* — the conlang direction: headwords, phrases,
+    declared forms, and inflected forms.
+  - *Show English to conlang translations* — the English direction. Turn it off
+    if your made-up words are still being read as English. It also disables the
+    cypher preview, which transforms hovered text the same way — leaving that on
+    would keep producing the output you just switched off.
+
+  Both default to on, so nothing changes unless you touch them. Turning both off
+  makes hover inert, and the mousemove handler then short-circuits before doing
+  any layout work. ([#12])
+
+### Changed
+- The *Fallback for unknown words* dropdown is disabled while the English
+  direction is off, instead of silently having no effect.
+- **README** documents the full hover resolution order and both new toggles.
+
+[#12]: https://github.com/Obsidian-TTRPG-Community/Made-Up-Words/issues/12
+
 ## [0.20.1] - Lint and code-health pass
 
 _No new features. A full pass over the Obsidian plugin-guideline lint rules,

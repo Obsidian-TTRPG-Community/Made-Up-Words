@@ -143,6 +143,21 @@ export interface ConlangSettings {
   // (the old behaviour), "shift"/"alt"/"ctrl" require holding that key.
   // Default "shift" because always-on is too intrusive — multiple testers said so.
   hoverModifier: "none" | "shift" | "alt" | "ctrl";
+  // === Hover direction (v0.21) ===
+  // Hovering resolves in two directions. These mirror highlightConlang /
+  // highlightEnglish so the two feature areas are configured the same way.
+  //
+  // Conlang direction: the hovered word IS one of your made-up words (a
+  // headword, a declared form, an inflected form, or a known phrase), and the
+  // tooltip shows its meaning.
+  hoverConlang: boolean;
+  // English direction: the hovered word is English that some entry translates,
+  // so the tooltip shows the conlang word(s) for it. This ALSO governs the
+  // cypher preview fallback, which is an English-to-conlang transformation of
+  // the hovered text — leaving that on while this is off would keep producing
+  // the very output the user switched off. Turn off when your made-up words
+  // are being mistaken for English.
+  hoverEnglish: boolean;
   // What to show in the hover tooltip when a word has no dictionary entry.
   // "cypher" = the cyphered form (default — the existing behaviour),
   // "nothing" = no tooltip at all (less noise for users who only care about dictionary).
@@ -229,6 +244,8 @@ export const DEFAULT_SETTINGS: ConlangSettings = {
   primaryLanguage: "Example",
   commitWrapper: "html-tooltip",
   hoverModifier: "shift",
+  hoverConlang: true,
+  hoverEnglish: true,
   hoverFallback: "cypher",
   highlightKnownWords: true,
   highlightStyle: "underline",

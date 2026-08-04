@@ -71,13 +71,23 @@ Click the book-open icon in the left ribbon (or run **Made Up Words: Open panel*
 
 By default, hover tooltips require **holding Shift** while pointing at a word — this keeps them out of the way during normal reading. Change this in Settings → Made Up Words → Hover modifier key (options: None, Shift, Alt, Ctrl/Cmd). Setting it to "None" restores the old always-on behaviour. Note: after pressing or releasing the modifier, move the mouse slightly to refresh the tooltip state.
 
-When you hover:
+Hover resolves in a fixed order, and **your conlang always wins over English**:
 
-- Direct dictionary entry → full metadata
-- Inflected form → the lemma plus inflection label ("kalath = plural of kala")
-- English word matching multiple senses → **all candidates listed**, plugin doesn't pick
-- Multi-word phrase → the phrase entry
-- Cypher transformation available → labelled as "cypher only"
+1. Multi-word phrase → the phrase entry
+2. Direct dictionary entry → full metadata (every sense, if the spelling is a homograph)
+3. Hardcoded declared form → the lemma plus its label ("kalath = plural of kala")
+4. Rule-derived inflected form → same, via your inflection rules
+5. English word a definition matches → **all candidates listed**, plugin doesn't pick
+6. Nothing matched → cypher transformation, labelled as "cypher only"
+
+Steps 1–4 are the *conlang direction*; steps 5–6 are the *English direction*. If a word resolves as any of 1–4, the English direction is never consulted — so a made-up word that happens to look like English is read as your word, not as English.
+
+Both directions can be turned off independently under **Settings → Hover tooltips**:
+
+- **Show your words' meanings** — the conlang direction (steps 1–4).
+- **Show English to conlang translations** — the English direction (steps 5–6). Turn this off if your made-up words are still being mistaken for English. It also disables the cypher preview, since that transformation treats the hovered text as English too.
+
+Turning both off disables hover entirely. Hover can also be switched off per language in each language card.
 
 ### "Look up word" command
 

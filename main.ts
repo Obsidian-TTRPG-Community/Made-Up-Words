@@ -18,9 +18,9 @@ import {
   DictionaryEntry,
 } from "./types";
 import { applyCypher, applyCypherReverse } from "./cypher";
-import { Dictionary } from "./dictionary";
+import { Dictionary, FormMatch } from "./dictionary";
 import { findInflection, InflectionMatch } from "./inflection";
-import { matchPhraseAtStart, PhraseIndex } from "./phrases";
+import { matchPhraseAtStart, PhraseIndex, EMPTY_PHRASE_INDEX } from "./phrases";
 import { WORD_RE, cleanWord, isWordChar, applyCasing } from "./word-tokens";
 import { ConlangSettingTab } from "./settings";
 import { TranslationPanelView, VIEW_TYPE_PANEL } from "./panel";
@@ -1289,7 +1289,20 @@ export default class ConlangPlugin extends Plugin {
    * single boolean check instead of scanning languages on every event.
    */
   private updateHoverActive() {
-    this.hoverActive = this.getActiveLanguages().some((l) => l.hoverEnabled);
+    // With both directions off there is nothing a tooltip could show — not even
+    // the cypher preview, which the English direction now gates — so the whole
+    // mousemove path can short-circuit before any caret resolution (a layout
+    // flush) happens.
+    const anyDirection = this.settings.hoverConlang || this.settings.hoverEnglish;
+    this.hoverActive =
+      anyDirection && this.getActiveLanguages().some((l) => l.hoverEnabled);
+    // Hover just went inert. Any tooltip already on screen would otherwise stay
+    // pinned there, because the mousemove handler now returns before reaching
+    // the code that hides it.
+    if (!this.hoverActive) {
+      this.hideTooltip();
+      this.lastHoverWord = null;
+    }
   }
 
   /**
@@ -1376,7 +1389,11 @@ export default class ConlangPlugin extends Plugin {
     // Phrase check FIRST: if the hovered word is part of a known phrase,
     // show the phrase entry rather than the single-word lookup. We scan
     // backward from the cursor looking for phrase starts.
-    const phrases = this.dictionary.phraseIndex();
+    // Phrase entries are conlang headwords, so this is the conlang direction
+    // (same gating highlight-core applies to the phrase index).
+    const phrases = this.settings.hoverConlang
+      ? this.dictionary.phraseIndex()
+      : EMPTY_PHRASE_INDEX;
     if (phrases.size > 0) {
       const phraseHit = this.findPhraseAroundCursor(ctx, phrases);
       if (phraseHit) {
@@ -1385,19 +1402,46 @@ export default class ConlangPlugin extends Plugin {
       }
     }
 
-    // Try the dictionary in both directions, plus inflection lookup:
-    // 1. Hovered word is a conlang word (in any active language) -> show its definition
-    // 2. Hovered word is an inflected form (in any active language) -> show lemma + label
-    // 3. Hovered word is English text matching a definition (any language) -> show all
-    // 4. Fall back to forward cypher preview (using primary language's cypher)
-    // Combine matches from BOTH directions across all active languages:
-    //   - conlang direction: the hovered word IS a dictionary headword
-    //   - English direction: the hovered word is a definition of entries
-    // De-duplicated by file path. This way a word that exists in several
-    // languages (e.g. "looked" -> luukid in one language, looked in another)
-    // shows every language's entry in a single tooltip rather than just one.
-    const dictEntries = this.dictionary.lookupAll(cleaned);
-    const englishHits = this.dictionary.lookupEnglish(cleaned);
+    // Resolution order, matching highlight-core.ts exactly:
+    //   1. conlang headword            (lookupAll)
+    //   2. hardcoded declared form     (lookupForm)
+    //   3. rule-derived inflected form (findInflection)
+    //   4. English text a definition matches
+    //   5. forward cypher preview (primary language)
+    //
+    // The whole conlang side WINS over the English side: if the hovered word
+    // resolves as any of 1-3, the English direction is never consulted.
+    // Merging the two meant a word that is both one of your words and some
+    // other entry's English definition produced a tooltip mixing "what your
+    // word means" with "how to say this English word" — issue #12. Giving only
+    // headwords precedence would leave the bug live for every inflected form,
+    // which in an inflecting conlang is most tokens in a sentence.
+    const conlangSide = this.settings.hoverConlang;
+    const dictEntries = conlangSide ? this.dictionary.lookupAll(cleaned) : [];
+
+    // 2 and 3 are only worth computing when 1 missed; a headword outranks both.
+    let declaredForm: FormMatch | undefined;
+    let inflectionMatch: InflectionMatch | null = null;
+    if (conlangSide && dictEntries.length === 0) {
+      declaredForm = this.dictionary.lookupForm(cleaned)[0];
+      if (!declaredForm) {
+        for (const activeLang of this.getActiveLanguages()) {
+          inflectionMatch = findInflection(
+            cleaned,
+            this.dictionary,
+            activeLang.inflections
+          );
+          if (inflectionMatch) break;
+        }
+      }
+    }
+    const conlangMatched =
+      dictEntries.length > 0 || declaredForm !== undefined || inflectionMatch !== null;
+
+    const englishHits =
+      this.settings.hoverEnglish && !conlangMatched
+        ? this.dictionary.lookupEnglish(cleaned)
+        : [];
     const combined: DictionaryEntry[] = [...dictEntries];
     for (const e of englishHits) {
       if (!combined.some((c) => c.path === e.path)) combined.push(e);
@@ -1406,11 +1450,22 @@ export default class ConlangPlugin extends Plugin {
     // with any match. So hovering one language's form (e.g. "Traenslaetis")
     // also surfaces the same concept in other active languages
     // (e.g. "Translateees"), since they share the English definition.
+    //
+    // Deliberately NOT gated on hoverEnglish: it keys off an already matched
+    // entry's definition rather than the hovered text, so it's a
+    // conlang-to-conlang bridge that happens to route through the shared gloss.
+    //
+    // The one way it could route back to the hovered text is an entry whose
+    // definition repeats its own headword or alias (e.g. a loanword or a proper
+    // noun entered with the same conlang form and referent). Skipping a sense
+    // equal to the hovered word closes that path, which would otherwise
+    // reintroduce exactly the English-direction hits suppressed above.
+    const selfKey = cleaned.toLowerCase();
     const seenDefs = new Set<string>();
     for (const e of [...combined]) {
       for (const sense of e.definition.split(/[,;]/)) {
         const key = sense.trim().toLowerCase();
-        if (!key || seenDefs.has(key)) continue;
+        if (!key || key === selfKey || seenDefs.has(key)) continue;
         seenDefs.add(key);
         for (const sib of this.dictionary.lookupEnglish(key)) {
           if (!combined.some((c) => c.path === sib.path)) combined.push(sib);
@@ -1426,9 +1481,7 @@ export default class ConlangPlugin extends Plugin {
       return;
     }
 
-    // No direct/English match — check hardcoded forms BEFORE the rules, so a
-    // declared irregular always wins over whatever a rule would derive.
-    const declaredForm = this.dictionary.lookupForm(cleaned)[0];
+    // A hardcoded declared form beats a rule-derived one (issue #10).
     if (declaredForm) {
       this.showInflectionTooltip(evt.clientX, evt.clientY, {
         lemma: declaredForm.lemma,
@@ -1437,24 +1490,23 @@ export default class ConlangPlugin extends Plugin {
       });
       return;
     }
-
-    // Then try inflection rules from each active language.
-    const activeLanguages = this.getActiveLanguages();
-    for (const activeLang of activeLanguages) {
-      const inflectionMatch = findInflection(cleaned, this.dictionary, activeLang.inflections);
-      if (inflectionMatch) {
-        this.showInflectionTooltip(
-          evt.clientX,
-          evt.clientY,
-          ConlangPlugin.toFormBanner(inflectionMatch)
-        );
-        return;
-      }
+    if (inflectionMatch) {
+      this.showInflectionTooltip(
+        evt.clientX,
+        evt.clientY,
+        ConlangPlugin.toFormBanner(inflectionMatch)
+      );
+      return;
     }
 
     // No dictionary match. Respect the user's setting for what to show as
     // a fallback — cypher preview (default) or nothing (less noise).
-    if (this.settings.hoverFallback === "nothing") {
+    //
+    // The cypher preview is itself an English-to-conlang transformation of the
+    // hovered text, so it belongs to the English direction. Showing it while
+    // that direction is switched off would keep producing exactly the output
+    // the user turned off (issue #12).
+    if (!this.settings.hoverEnglish || this.settings.hoverFallback === "nothing") {
       this.scheduleHideTooltip();
       return;
     }
