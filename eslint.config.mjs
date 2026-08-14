@@ -31,8 +31,14 @@ export default defineConfig([
       //     matching Obsidian's capitalisation is more correct than the rule.
       //   - "Alt", "Option", "Ctrl", "Cmd", "Shift" are key names as printed
       //     on keyboards.
+      // Severity stays at the plugin's own default ("warn"): the brands and
+      // acronyms below remove the false positives that can be removed, but a
+      // handful remain where the rule mis-reads "e.g." as a sentence break or
+      // counts a leading glyph as the first word. Those labels are correct as
+      // written, and inline disables for obsidianmd/* rules are not permitted,
+      // so the remaining reports are left visible as warnings.
       "obsidianmd/ui/sentence-case": [
-        "error",
+        "warn",
         {
           brands: [
             "Made Up Words",

@@ -1354,11 +1354,15 @@ var ConlangSettingTab = class extends import_obsidian2.PluginSettingTab {
           isActive ? `Reloaded \u2014 ${n} entries across active languages` : `${lang.name} is inactive; activate it to load its dictionary.`
         );
       })
-    ).addButton(
-      (b) => b.setButtonText("Remove language").setWarning().onClick(async () => {
+    ).addButton((b) => {
+      var _a;
+      b.setButtonText("Remove language").onClick(async () => {
         await this.removeLanguage(index, lang.name);
-      })
-    );
+      });
+      const destructive = b;
+      const applyStyle = (_a = destructive.setDestructive) != null ? _a : destructive.setWarning;
+      applyStyle == null ? void 0 : applyStyle.call(destructive);
+    });
     const sheetsBody = this.collapsible(body, {
       title: "Cypher sheets",
       key: lang.name,
@@ -2071,18 +2075,18 @@ var _TranslationPanelView = class _TranslationPanelView extends import_obsidian3
     if (primary) {
       const actions = this.headerEl.createDiv({ cls: "conlang-panel-header-actions" });
       const wordBtn = actions.createEl("button", {
-        // The first token is a glyph, not a word, so the rule wants "+ word" /
-        // "swap direction" — which reads worse than the label users already know.
-        // eslint-disable-next-line obsidianmd/ui/sentence-case
+        // The sentence-case rule counts the leading glyph as the first word and
+        // asks for "+ word" — which reads worse than the label users already
+        // know, so that warning is expected here.
         text: "+ Word",
         cls: "conlang-panel-btn"
       });
       wordBtn.title = `Add a new word to ${primary.name} (the primary language). Click a star above to change the primary.`;
       wordBtn.addEventListener("click", () => void this.plugin.createWordFromPanel());
       const nameBtn = actions.createEl("button", {
-        // The first token is a glyph, not a word, so the rule wants "+ word" /
-        // "swap direction" — which reads worse than the label users already know.
-        // eslint-disable-next-line obsidianmd/ui/sentence-case
+        // The sentence-case rule counts the leading glyph as the first word and
+        // asks for "+ word" — which reads worse than the label users already
+        // know, so that warning is expected here.
         text: "+ Name",
         cls: "conlang-panel-btn"
       });
@@ -2656,9 +2660,9 @@ var _TranslationPanelView = class _TranslationPanelView extends import_obsidian3
     });
     const swapRow = this.translatorEl.createDiv({ cls: "conlang-translator-swap-row" });
     this.translatorSwapBtn = swapRow.createEl("button", {
-      // The first token is a glyph, not a word, so the rule wants "+ word" /
-      // "swap direction" — which reads worse than the label users already know.
-      // eslint-disable-next-line obsidianmd/ui/sentence-case
+      // The sentence-case rule counts the leading glyph as the first word and
+      // asks for "swap direction" — which reads worse than the label users
+      // already know, so that warning is expected here.
       text: "\u2191\u2193 Swap direction",
       cls: "conlang-panel-btn conlang-translator-swap"
     });
@@ -3466,7 +3470,7 @@ var NameCreationModal = class extends import_obsidian5.Modal {
       cls: "conlang-help",
       text: "Names are proper nouns \u2014 character names, places, factions, artifacts. They're locked at creation: even if you change cypher rules later, the name stays the same."
     });
-    contentEl.createEl("div", { cls: "conlang-modal-label", text: "Name (in conlang)" });
+    contentEl.createDiv({ cls: "conlang-modal-label", text: "Name (in conlang)" });
     this.conlangInput = contentEl.createEl("input", { type: "text" });
     this.conlangInput.placeholder = "Type the name directly, or derive one below\u2026";
     this.conlangInput.addClass("conlang-modal-input");
@@ -3496,14 +3500,14 @@ var NameCreationModal = class extends import_obsidian5.Modal {
       e.preventDefault();
       this.applyCypher();
     });
-    contentEl.createEl("div", { cls: "conlang-modal-label", text: "Refers to" });
+    contentEl.createDiv({ cls: "conlang-modal-label", text: "Refers to" });
     this.referentInput = contentEl.createEl("input", { type: "text" });
     this.referentInput.placeholder = "e.g. the inland sea, Princess of the Five Kingdoms\u2026";
     this.referentInput.addClass("conlang-modal-input");
     this.referentInput.addEventListener("input", () => {
       this.referent = this.referentInput.value;
     });
-    contentEl.createEl("div", { cls: "conlang-modal-label", text: "Category" });
+    contentEl.createDiv({ cls: "conlang-modal-label", text: "Category" });
     const categoryInput = contentEl.createEl("input", { type: "text" });
     categoryInput.placeholder = "e.g. character, place, faction, or your own term";
     categoryInput.value = this.category;
@@ -3702,7 +3706,7 @@ var WordCreationModal = class extends import_obsidian7.Modal {
   onOpen() {
     const { contentEl } = this;
     contentEl.createEl("h3", { text: "Add a word" });
-    contentEl.createEl("div", { cls: "conlang-modal-label", text: "English meaning" });
+    contentEl.createDiv({ cls: "conlang-modal-label", text: "English meaning" });
     this.englishInput = contentEl.createEl("input", { type: "text" });
     this.englishInput.placeholder = "e.g. water, to walk, red";
     this.englishInput.addClass("conlang-modal-input");
@@ -3710,7 +3714,7 @@ var WordCreationModal = class extends import_obsidian7.Modal {
       this.englishDefinition = this.englishInput.value;
     });
     window.setTimeout(() => this.englishInput.focus(), 0);
-    contentEl.createEl("div", { cls: "conlang-modal-label", text: "Made-up word" });
+    contentEl.createDiv({ cls: "conlang-modal-label", text: "Made-up word" });
     const conlangRow = contentEl.createDiv({ cls: "conlang-modal-derive-row" });
     this.conlangInput = conlangRow.createEl("input", { type: "text" });
     this.conlangInput.placeholder = "Type your invented word, or derive it from English";
@@ -3724,7 +3728,7 @@ var WordCreationModal = class extends import_obsidian7.Modal {
       e.preventDefault();
       this.deriveFromEnglish();
     });
-    contentEl.createEl("div", { cls: "conlang-modal-label", text: "Part of speech (optional)" });
+    contentEl.createDiv({ cls: "conlang-modal-label", text: "Part of speech (optional)" });
     this.posInput = contentEl.createEl("input", { type: "text" });
     this.posInput.placeholder = "e.g. noun, verb, adjective\u2026";
     this.posInput.addClass("conlang-modal-input");

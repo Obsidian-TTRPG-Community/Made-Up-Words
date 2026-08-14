@@ -75,9 +75,8 @@ export class EntryCreationModal extends Modal {
 
     this.posInput = contentEl.createEl("input", { type: "text" });
     // The sentence-case rule reads the full stop in "e.g." as a sentence
-    // boundary and demands the next word be capitalised ("E.g. Noun"). The
-    // copy is correct as written, so the rule is suppressed rather than obeyed.
-    // eslint-disable-next-line obsidianmd/ui/sentence-case
+    // boundary and asks for the next word to be capitalised ("E.g. Noun").
+    // The copy is correct as written, so that warning is expected here.
     this.posInput.placeholder = "e.g. noun, verb, adjective…";
     this.posInput.addClass("conlang-modal-input");
     window.setTimeout(() => this.posInput.focus(), 0);
@@ -184,9 +183,8 @@ export class MultiEntryModal extends Modal {
     });
     this.posInput = contentEl.createEl("input", { type: "text" });
     // The sentence-case rule reads the full stop in "e.g." as a sentence
-    // boundary and demands the next word be capitalised ("E.g. Noun"). The
-    // copy is correct as written, so the rule is suppressed rather than obeyed.
-    // eslint-disable-next-line obsidianmd/ui/sentence-case
+    // boundary and asks for the next word to be capitalised ("E.g. Noun").
+    // The copy is correct as written, so that warning is expected here.
     this.posInput.placeholder = "e.g. noun, verb, adjective…";
     this.posInput.addClass("conlang-modal-input");
     buildPosChips(contentEl, (value) => {

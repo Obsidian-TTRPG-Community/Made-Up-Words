@@ -1602,30 +1602,29 @@ export default class ConlangPlugin extends Plugin {
   ): { word: string; forwardContext: string; backwardContext: string } | null {
     // `caretPositionFromPoint` / `caretRangeFromPoint` are non-standard across
     // browsers, so type just the two methods we probe for rather than using any.
-    const doc = activeDocument as Document & {
+    // They are declared standalone (rather than intersected with `Document`) so
+    // the legacy call below resolves to this declaration instead of the
+    // deprecated `Document.caretRangeFromPoint` in lib.dom.
+    type CaretProbe = {
       caretRangeFromPoint?(x: number, y: number): Range | null;
       caretPositionFromPoint?(
         x: number,
         y: number
       ): { offsetNode: Node; offset: number } | null;
     };
+    const doc = activeDocument as unknown as CaretProbe;
     let textNode: Node | null = null;
     let offset = 0;
-    // caretRangeFromPoint is marked deprecated but remains the most broadly
-    // supported option on Chromium; caretPositionFromPoint is the standard
-    // fallback. Intentionally probing both.
     // Prefer the standard `caretPositionFromPoint`; fall back to the legacy
     // `caretRangeFromPoint` for the older Chromium builds shipped with
     // Obsidian releases down to minAppVersion 1.7.2, where the standard method
-    // isn't available. The fallback is deliberate, hence the disable below.
+    // isn't available. The fallback is deliberate.
     if (typeof doc.caretPositionFromPoint === "function") {
       const pos = doc.caretPositionFromPoint(x, y);
       if (!pos) return null;
       textNode = pos.offsetNode;
       offset = pos.offset;
-      // eslint-disable-next-line @typescript-eslint/no-deprecated
     } else if (typeof doc.caretRangeFromPoint === "function") {
-      // eslint-disable-next-line @typescript-eslint/no-deprecated
       const range: Range | null = doc.caretRangeFromPoint(x, y);
       if (!range) return null;
       textNode = range.startContainer;
@@ -1650,6 +1649,8 @@ export default class ConlangPlugin extends Plugin {
 
   private ensureTooltipEl(): HTMLDivElement {
     if (!this.tooltipEl) {
+      // Left as a DOM call on purpose — see the note in highlight.ts:
+      // `activeWindow.createDiv()` resolves to an unresolved type here.
       this.tooltipEl = activeDocument.createElement("div");
       this.tooltipEl.addClass("conlang-tooltip");
       activeDocument.body.appendChild(this.tooltipEl);

@@ -232,9 +232,9 @@ export class TranslationPanelView extends ItemView {
       const actions = this.headerEl.createDiv({ cls: "conlang-panel-header-actions" });
 
       const wordBtn = actions.createEl("button", {
-        // The first token is a glyph, not a word, so the rule wants "+ word" /
-        // "swap direction" — which reads worse than the label users already know.
-        // eslint-disable-next-line obsidianmd/ui/sentence-case
+        // The sentence-case rule counts the leading glyph as the first word and
+        // asks for "+ word" — which reads worse than the label users already
+        // know, so that warning is expected here.
         text: "+ Word",
         cls: "conlang-panel-btn",
       });
@@ -242,9 +242,9 @@ export class TranslationPanelView extends ItemView {
       wordBtn.addEventListener("click", () => void this.plugin.createWordFromPanel());
 
       const nameBtn = actions.createEl("button", {
-        // The first token is a glyph, not a word, so the rule wants "+ word" /
-        // "swap direction" — which reads worse than the label users already know.
-        // eslint-disable-next-line obsidianmd/ui/sentence-case
+        // The sentence-case rule counts the leading glyph as the first word and
+        // asks for "+ word" — which reads worse than the label users already
+        // know, so that warning is expected here.
         text: "+ Name",
         cls: "conlang-panel-btn",
       });
@@ -959,9 +959,9 @@ export class TranslationPanelView extends ItemView {
     // Swap button between input and output
     const swapRow = this.translatorEl.createDiv({ cls: "conlang-translator-swap-row" });
     this.translatorSwapBtn = swapRow.createEl("button", {
-      // The first token is a glyph, not a word, so the rule wants "+ word" /
-      // "swap direction" — which reads worse than the label users already know.
-      // eslint-disable-next-line obsidianmd/ui/sentence-case
+      // The sentence-case rule counts the leading glyph as the first word and
+      // asks for "swap direction" — which reads worse than the label users
+      // already know, so that warning is expected here.
       text: "↑↓ Swap direction",
       cls: "conlang-panel-btn conlang-translator-swap",
     });

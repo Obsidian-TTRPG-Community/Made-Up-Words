@@ -494,19 +494,21 @@ export class ConlangSettingTab extends PluginSettingTab {
           );
         })
       )
-      .addButton((b) =>
-        b
-          .setButtonText("Remove language")
-          // `setWarning` is deprecated in Obsidian 1.13.0 in favour of
-          // `setDestructive`, but that method doesn't exist on 1.7.2, which is
-          // this plugin's minAppVersion — calling it there would throw. Keep
-          // `setWarning` until minAppVersion moves past 1.13.0.
-          // eslint-disable-next-line @typescript-eslint/no-deprecated
-          .setWarning()
-          .onClick(async () => {
-            await this.removeLanguage(index, lang.name);
-          })
-      );
+      .addButton((b) => {
+        b.setButtonText("Remove language").onClick(async () => {
+          await this.removeLanguage(index, lang.name);
+        });
+        // Obsidian 1.13.0 renamed `setWarning()` to `setDestructive()`, but
+        // `setDestructive()` does not exist on 1.7.2, this plugin's
+        // minAppVersion. Resolve the method through a local type so whichever
+        // one the running app provides is the one that gets called.
+        const destructive = b as unknown as {
+          setDestructive?: () => unknown;
+          setWarning?: () => unknown;
+        };
+        const applyStyle = destructive.setDestructive ?? destructive.setWarning;
+        applyStyle?.call(destructive);
+      });
 
     // --- Cypher sheets (nested collapsible) ---
     const sheetsBody = this.collapsible(body, {

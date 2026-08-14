@@ -74,7 +74,7 @@ export class NameCreationModal extends Modal {
     });
 
     // === Conlang form (the actual name) ===
-    contentEl.createEl("div", { cls: "conlang-modal-label", text: "Name (in conlang)" });
+    contentEl.createDiv({ cls: "conlang-modal-label", text: "Name (in conlang)" });
     this.conlangInput = contentEl.createEl("input", { type: "text" });
     this.conlangInput.placeholder = "Type the name directly, or derive one below…";
     this.conlangInput.addClass("conlang-modal-input");
@@ -91,9 +91,8 @@ export class NameCreationModal extends Modal {
     const deriveRow = deriveBlock.createDiv({ cls: "conlang-modal-derive-row" });
     this.deriveInput = deriveRow.createEl("input", { type: "text" });
     // The sentence-case rule reads the full stop in "e.g." as a sentence
-    // boundary and demands the next word be capitalised ("E.g. Noun"). The
-    // copy is correct as written, so the rule is suppressed rather than obeyed.
-    // eslint-disable-next-line obsidianmd/ui/sentence-case
+    // boundary and asks for the next word to be capitalised ("E.g. Noun").
+    // The copy is correct as written, so that warning is expected here.
     this.deriveInput.placeholder = "e.g. darkness, river, oath";
     this.deriveInput.addClass("conlang-modal-input");
     this.deriveInput.addEventListener("input", () => {
@@ -114,12 +113,11 @@ export class NameCreationModal extends Modal {
     });
 
     // === Referent (English description of what this name refers to) ===
-    contentEl.createEl("div", { cls: "conlang-modal-label", text: "Refers to" });
+    contentEl.createDiv({ cls: "conlang-modal-label", text: "Refers to" });
     this.referentInput = contentEl.createEl("input", { type: "text" });
     // The sentence-case rule reads the full stop in "e.g." as a sentence
-    // boundary and demands the next word be capitalised ("E.g. Noun"). The
-    // copy is correct as written, so the rule is suppressed rather than obeyed.
-    // eslint-disable-next-line obsidianmd/ui/sentence-case
+    // boundary and asks for the next word to be capitalised ("E.g. Noun").
+    // The copy is correct as written, so that warning is expected here.
     this.referentInput.placeholder = "e.g. the inland sea, Princess of the Five Kingdoms…";
     this.referentInput.addClass("conlang-modal-input");
     this.referentInput.addEventListener("input", () => {
@@ -127,12 +125,11 @@ export class NameCreationModal extends Modal {
     });
 
     // === Category: free-form text plus quick-pick chips ===
-    contentEl.createEl("div", { cls: "conlang-modal-label", text: "Category" });
+    contentEl.createDiv({ cls: "conlang-modal-label", text: "Category" });
     const categoryInput = contentEl.createEl("input", { type: "text" });
     // The sentence-case rule reads the full stop in "e.g." as a sentence
-    // boundary and demands the next word be capitalised ("E.g. Noun"). The
-    // copy is correct as written, so the rule is suppressed rather than obeyed.
-    // eslint-disable-next-line obsidianmd/ui/sentence-case
+    // boundary and asks for the next word to be capitalised ("E.g. Noun").
+    // The copy is correct as written, so that warning is expected here.
     categoryInput.placeholder = "e.g. character, place, faction, or your own term";
     categoryInput.value = this.category;
     categoryInput.addClass("conlang-modal-input");

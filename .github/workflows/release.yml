@@ -10,6 +10,10 @@ on:
 
 permissions:
   contents: write
+  # Required by actions/attest-build-provenance so users can cryptographically
+  # verify that main.js / styles.css were built from this repository.
+  id-token: write
+  attestations: write
 
 jobs:
   release:
@@ -24,7 +28,9 @@ jobs:
           node-version: "20.x"
 
       - name: Install dependencies
-        run: npm install
+        # `npm ci` (not `npm install`) so the build uses exactly the versions in
+        # package-lock.json and fails loudly if the lockfile drifts out of date.
+        run: npm ci
 
       - name: Build plugin
         run: npm run build
@@ -38,6 +44,13 @@ jobs:
             exit 1
           fi
           echo "Tag and manifest version match: $TAG"
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            main.js
+            styles.css
 
       - name: Create draft release
         env:

@@ -227,6 +227,10 @@ function replaceTextNode(plugin: ConlangPlugin, textNode: Text) {
   const spans = highlightSpans(plugin, text, 0);
   if (spans.length === 0) return;
 
+  // Left as DOM calls on purpose: the `activeWindow.createFragment()` /
+  // `createSpan()` helpers that eslint --fix suggests here resolve to an
+  // unresolved type against this project's obsidian typings, which turns the
+  // whole block into no-unsafe-* errors. Do not auto-fix these two lines.
   const frag = activeDocument.createDocumentFragment();
   let cursor = 0;
   for (const span of spans) {

@@ -55,12 +55,11 @@ export class WordCreationModal extends Modal {
     const { contentEl } = this;
     contentEl.createEl("h3", { text: "Add a word" });
 
-    contentEl.createEl("div", { cls: "conlang-modal-label", text: "English meaning" });
+    contentEl.createDiv({ cls: "conlang-modal-label", text: "English meaning" });
     this.englishInput = contentEl.createEl("input", { type: "text" });
     // The sentence-case rule reads the full stop in "e.g." as a sentence
-    // boundary and demands the next word be capitalised ("E.g. Noun"). The
-    // copy is correct as written, so the rule is suppressed rather than obeyed.
-    // eslint-disable-next-line obsidianmd/ui/sentence-case
+    // boundary and asks for the next word to be capitalised ("E.g. Noun").
+    // The copy is correct as written, so that warning is expected here.
     this.englishInput.placeholder = "e.g. water, to walk, red";
     this.englishInput.addClass("conlang-modal-input");
     this.englishInput.addEventListener("input", () => {
@@ -68,7 +67,7 @@ export class WordCreationModal extends Modal {
     });
     window.setTimeout(() => this.englishInput.focus(), 0);
 
-    contentEl.createEl("div", { cls: "conlang-modal-label", text: "Made-up word" });
+    contentEl.createDiv({ cls: "conlang-modal-label", text: "Made-up word" });
     const conlangRow = contentEl.createDiv({ cls: "conlang-modal-derive-row" });
     this.conlangInput = conlangRow.createEl("input", { type: "text" });
     this.conlangInput.placeholder = "Type your invented word, or derive it from English";
@@ -83,12 +82,11 @@ export class WordCreationModal extends Modal {
       this.deriveFromEnglish();
     });
 
-    contentEl.createEl("div", { cls: "conlang-modal-label", text: "Part of speech (optional)" });
+    contentEl.createDiv({ cls: "conlang-modal-label", text: "Part of speech (optional)" });
     this.posInput = contentEl.createEl("input", { type: "text" });
     // The sentence-case rule reads the full stop in "e.g." as a sentence
-    // boundary and demands the next word be capitalised ("E.g. Noun"). The
-    // copy is correct as written, so the rule is suppressed rather than obeyed.
-    // eslint-disable-next-line obsidianmd/ui/sentence-case
+    // boundary and asks for the next word to be capitalised ("E.g. Noun").
+    // The copy is correct as written, so that warning is expected here.
     this.posInput.placeholder = "e.g. noun, verb, adjective…";
     this.posInput.addClass("conlang-modal-input");
     this.posInput.addEventListener("input", () => {

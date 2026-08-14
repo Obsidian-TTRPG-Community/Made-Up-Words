@@ -6,6 +6,42 @@ This project is pre-1.0. Expect rough edges and occasional breaking changes to
 settings or data formats. Where a change affects existing data, migration is
 handled automatically on load.
 
+## [0.21.1] - Community review fixes
+
+No user-facing behaviour changes. This release clears the four errors reported
+by the Obsidian community-plugin automated review of 0.21.0.
+
+### Fixed
+- **Committed lockfile is back in sync with `package.json`.** The review's
+  dependency check and its build verification both failed on a stale
+  `package-lock.json`. Regenerated, and `@codemirror/state` / `@codemirror/view`
+  are now pinned to the exact versions Obsidian 1.13.0 declares as peers
+  (`6.5.0` / `6.38.6`) — the previous carets requested versions above the pin,
+  so a clean `npm install` resolved with peer-dependency overrides.
+- **No more suppressed lint rules.** `eslint-plugin-obsidianmd` 0.4.x forbids
+  inline `eslint-disable` of `obsidianmd/*` and `@typescript-eslint/no-deprecated`,
+  and requires a description on every directive comment. All 13 directive
+  comments have been removed rather than annotated:
+  - `caretRangeFromPoint` (the pre-1.13.0 caret fallback) is now reached through
+    a locally declared type, so the call no longer resolves to the deprecated
+    `Document` member. The fallback itself is unchanged.
+  - The *Remove language* button now calls `setDestructive()` where the running
+    app provides it and `setWarning()` where it does not, resolved through a
+    local type. Previously it always called the deprecated `setWarning()`.
+  - The remaining suppressions were for `obsidianmd/ui/sentence-case` on strings
+    the rule reads wrongly ("e.g. …" placeholders, and buttons whose first token
+    is a glyph). The copy is unchanged; the rule now runs at the plugin's own
+    default severity, so those report as warnings instead of being silenced.
+
+### Changed
+- Release workflow publishes **GitHub artifact attestations** for `main.js` and
+  `styles.css`, so their provenance can be cryptographically verified against
+  this repository.
+- Release workflow installs with `npm ci` instead of `npm install`, so a future
+  lockfile drift fails the build instead of passing quietly.
+- Three `createEl("div", …)` calls in the word and name modals are now
+  `createDiv(…)`, per `obsidianmd/prefer-create-el`.
+
 ## [0.21.0] - Hover direction control
 
 _Resolves [#12](https://github.com/Obsidian-TTRPG-Community/Made-Up-Words/issues/12)._
