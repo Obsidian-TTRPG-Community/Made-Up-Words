@@ -6,6 +6,29 @@ This project is pre-1.0. Expect rough edges and occasional breaking changes to
 settings or data formats. Where a change affects existing data, migration is
 handled automatically on load.
 
+## [0.22.0] - Export dictionary
+
+### Added
+- **Export dictionary.** A new command (and an *Export…* button in settings)
+  writes your dictionaries to a single shareable file, so a word list can be
+  sent to players, co-writers, or other conlangers. Three formats:
+  - **Markdown** — an alphabetical word list grouped by letter, with IPA, part
+    of speech, declared forms, aliases, compound parts, etymology, and notes,
+    plus an optional English → conlang index. Opens in a new tab after export.
+  - **CSV** — one row per entry for Excel, Google Sheets, or LibreOffice.
+    Written as UTF-8 with a byte-order mark so IPA survives Excel, and cells
+    that would run as spreadsheet formulas are neutralised.
+  - **JSON** — a lossless dump of every field plus each language's inflection
+    rules, tagged `"format": "made-up-words-export", "version": 1` so a future
+    import command can read it.
+
+  Any configured language can be exported, active or not; each is loaded
+  separately, so exporting never disturbs the live dictionary. Options to leave
+  out names (proper nouns) and to include each entry note's freeform text. Files
+  go to `Made Up Words exports/` by default, are named `<Language> dictionary
+  <date>`, and never overwrite an earlier export. The modal remembers your
+  choices.
+
 ## [0.21.1] - Community review fixes
 
 No user-facing behaviour changes. This release clears the four errors reported

@@ -10,6 +10,7 @@ import {
   TFolder,
   WorkspaceLeaf,
   debounce,
+  normalizePath,
 } from "obsidian";
 import {
   ConlangSettings,
@@ -41,6 +42,14 @@ import {
   registerEntryLinkHandler,
 } from "./highlight";
 import type { HighlightKind } from "./highlight-core";
+import {
+  EXPORT_EXTENSIONS,
+  ExportLanguage,
+  extractExportBody,
+  formatExport,
+  isNameEntry,
+} from "./export-format";
+import { ExportModal, ExportRequest } from "./export-modal";
 import { EditorView } from "@codemirror/view";
 
 export default class ConlangPlugin extends Plugin {
@@ -193,6 +202,12 @@ export default class ConlangPlugin extends Plugin {
           }`
         );
       },
+    });
+
+    this.addCommand({
+      id: "export-dictionary",
+      name: "Export dictionary",
+      callback: () => this.exportDictionary(),
     });
 
     // Right-click (editor context menu) entry point for adding the selected
@@ -877,6 +892,135 @@ export default class ConlangPlugin extends Plugin {
     this.refreshPanel();
     this.refreshHighlights();
     this.lastHoverWord = null;
+  }
+
+  // === Export ===
+
+  /**
+   * Export one or more languages to a single shareable file in the vault:
+   * a Markdown word list, a CSV spreadsheet, or a lossless JSON dump.
+   *
+   * Each language is loaded into its own throwaway Dictionary, so inactive
+   * languages can be exported too and the live index is never touched.
+   */
+  async exportDictionary(): Promise<void> {
+    const languages = this.settings.languages;
+    if (languages.length === 0) {
+      new Notice("Made Up Words: no languages to export — add one in settings first");
+      return;
+    }
+    const saved = this.settings.exportDefaults ?? {};
+    const active = this.getActiveLanguages().map((l) => l.name);
+    const initial: ExportRequest = {
+      languages: active.length > 0 ? active : [languages[0].name],
+      format: saved.format ?? "markdown",
+      includeNames: saved.includeNames ?? true,
+      includeBody: saved.includeBody ?? false,
+      englishIndex: saved.englishIndex ?? true,
+      folder: saved.folder ?? "Made Up Words exports",
+    };
+    const req = await new Promise<ExportRequest | null>((resolve) => {
+      new ExportModal(
+        this.app,
+        languages.map((l) => l.name),
+        initial,
+        resolve
+      ).open();
+    });
+    if (!req) return;
+
+    // Remember the choices (not the language selection, which follows the
+    // active languages). saveData, not saveSettings: nothing visible changed,
+    // so there's no need to refresh the panel and highlights.
+    this.settings.exportDefaults = {
+      format: req.format,
+      includeNames: req.includeNames,
+      includeBody: req.includeBody,
+      englishIndex: req.englishIndex,
+      folder: req.folder,
+    };
+    await this.saveData(this.settings);
+
+    try {
+      const exportLangs: ExportLanguage[] = [];
+      for (const name of req.languages) {
+        const lang = languages.find((l) => l.name === name);
+        if (!lang) continue;
+        const dict = new Dictionary(this.app);
+        dict.setCaseSensitive(this.settings.caseSensitiveMatching);
+        await dict.loadFromFolders([{ folder: lang.dictionaryFolder, language: lang.name }]);
+        let entries = dict.allEntries();
+        if (!req.includeNames) entries = entries.filter((e) => !isNameEntry(e));
+        let bodies: Map<string, string> | undefined;
+        if (req.includeBody) {
+          const map = new Map<string, string>();
+          await Promise.all(
+            entries.map(async (e) => {
+              const file = this.app.vault.getAbstractFileByPath(e.path);
+              if (!(file instanceof TFile)) return;
+              const text = extractExportBody(await this.app.vault.cachedRead(file), e.word);
+              if (text) map.set(e.path, text);
+            })
+          );
+          bodies = map;
+        }
+        exportLangs.push({ name, entries, bodies, inflections: lang.inflections });
+      }
+
+      const total = exportLangs.reduce((n, l) => n + l.entries.length, 0);
+      if (total === 0) {
+        new Notice(
+          "Made Up Words: nothing to export — the selected dictionaries have no entries. " +
+            "Check each language's dictionary folder in settings."
+        );
+        return;
+      }
+
+      const now = new Date();
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const date = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+      const content = formatExport(
+        req.format,
+        exportLangs,
+        { englishIndex: req.englishIndex, date, pluginVersion: this.manifest.version },
+        req.includeBody
+      );
+
+      const folder = req.folder ? normalizePath(req.folder) : "";
+      if (folder && folder !== "/") await this.ensureFolderStrict(folder);
+      const stem =
+        exportLangs.length === 1
+          ? `${exportLangs[0].name} dictionary ${date}`
+          : `Dictionary ${date}`;
+      const path = this.uniqueExportPath(
+        folder && folder !== "/" ? folder : "",
+        // Characters Obsidian won't allow in a file name.
+        stem.replace(/[\\/:*?"<>|#^[\]]/g, "-"),
+        EXPORT_EXTENSIONS[req.format]
+      );
+      const file = await this.app.vault.create(path, content);
+      new Notice(
+        `Made Up Words: exported ${total} ${total === 1 ? "entry" : "entries"} to ${path}`
+      );
+      // Markdown opens straight away; Obsidian can't display CSV or JSON, so
+      // for those the notice (and the file explorer) is the hand-off.
+      if (req.format === "markdown") {
+        await this.app.workspace.getLeaf("tab").openFile(file);
+      }
+    } catch (e) {
+      console.error("[Conlang] export failed:", e);
+      const msg = e instanceof Error ? e.message : String(e);
+      new Notice(`Made Up Words: export failed — ${msg}`);
+    }
+  }
+
+  /** First free "<stem>.<ext>", then "<stem> 2.<ext>", "<stem> 3.<ext>"… */
+  private uniqueExportPath(folder: string, stem: string, ext: string): string {
+    const build = (n: number) =>
+      normalizePath(`${folder ? folder + "/" : ""}${stem}${n > 1 ? ` ${n}` : ""}.${ext}`);
+    let n = 1;
+    while (this.app.vault.getAbstractFileByPath(build(n))) n++;
+    return build(n);
   }
 
   /**

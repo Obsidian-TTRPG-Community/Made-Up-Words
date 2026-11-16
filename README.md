@@ -121,6 +121,18 @@ Multi-word entries work via the `word:` frontmatter override. Compounds can decl
 
 About 30 common inflection category labels (plural, past, genitive, comparative, evidential, etc.) have built-in hover explanations to help users learn linguistic vocabulary. Custom labels can have their own descriptions on each rule.
 
+### Exporting and sharing
+
+**Export dictionary** (command palette, or the *Export…* button in settings) writes one or more languages to a single file in your vault, ready to send to players, co-writers, or fellow conlangers. Your entry notes are never changed.
+
+| Format | Best for |
+|---|---|
+| **Markdown** (`.md`) | A readable, alphabetical word list grouped by letter, with IPA, part of speech, forms, aliases, and etymology. Optionally adds an English → conlang index. Share it as a note, publish it, or print it to PDF. |
+| **CSV** (`.csv`) | Excel, Google Sheets, LibreOffice, or other conlang tools. One row per entry; aliases and forms are `;`-separated. Saved as UTF-8 with a byte-order mark so IPA and diacritics survive opening in Excel. |
+| **JSON** (`.json`) | Every field, for backups and scripts. Includes the language's inflection rules. |
+
+Options: pick which languages to include (inactive ones too), leave out names (handy for sharing vocabulary without spoiling the people and places in your setting), and include the freeform text from each entry note. The file goes to `Made Up Words exports/` by default and is named with the language and date; an existing export is never overwritten. Your choices are remembered for next time.
+
 ---
 
 ## Installation
@@ -301,6 +313,7 @@ In the command palette under "Made Up Words:":
 - **Add selection to dictionary** — opens the save-to-dictionary modal
 - **Add a name (proper noun)**
 - **Reload dictionary**
+- **Export dictionary** — save a shareable word list as Markdown, CSV, or JSON (see [Exporting and sharing](#exporting-and-sharing))
 
 Assign hotkeys to the commands you use most.
 

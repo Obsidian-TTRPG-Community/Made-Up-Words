@@ -52,6 +52,7 @@ export class ConlangSettingTab extends PluginSettingTab {
     this.renderHighlightSection(containerEl);
     this.renderMatchingSection(containerEl);
     this.renderTranslationSection(containerEl);
+    this.renderExportSection(containerEl);
 
     new Setting(containerEl).setName("Individual languages").setHeading();
     containerEl.createEl("p", {
@@ -339,6 +340,21 @@ export class ConlangSettingTab extends PluginSettingTab {
         tg.setValue(this.plugin.settings.showFormsInTooltip).onChange(async (v) => {
           this.plugin.settings.showFormsInTooltip = v;
           await this.plugin.saveSettings();
+        })
+      );
+  }
+
+  private renderExportSection(containerEl: HTMLElement): void {
+    new Setting(containerEl).setName("Export").setHeading();
+    new Setting(containerEl)
+      .setName("Export dictionary")
+      .setDesc(
+        "Save a word list to share with others — as a Markdown note, a CSV " +
+          "spreadsheet, or a full JSON backup. Also available as a command."
+      )
+      .addButton((b) =>
+        b.setButtonText("Export…").onClick(() => {
+          void this.plugin.exportDictionary();
         })
       );
   }

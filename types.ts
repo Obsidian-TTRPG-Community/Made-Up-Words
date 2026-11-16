@@ -192,6 +192,16 @@ export interface ConlangSettings {
   // hover tooltip. The side panel always shows them; this only controls the
   // tooltip, which some users keep deliberately minimal.
   showFormsInTooltip: boolean;
+  // === Export (v0.22) ===
+  // The choices last used in the Export dictionary modal, so a repeat export
+  // is one click. Optional: absent until the first export.
+  exportDefaults?: {
+    format?: "markdown" | "csv" | "json";
+    includeNames?: boolean;
+    includeBody?: boolean;
+    englishIndex?: boolean;
+    folder?: string;
+  };
 }
 
 export const DEFAULT_SETTINGS: ConlangSettings = {
